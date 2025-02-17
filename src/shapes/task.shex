@@ -1,0 +1,19 @@
+
+PREFIX sp: <urn:solid-planner:core#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX schema: <https://schema.org/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+
+sp:Task EXTRA a {
+  a [ schema:Action ];
+  sp:title xsd:string;
+  sp:description xsd:string ?;
+  sp:priority xsd:integer ?;
+  schema:dateCreated xsd:date ?;
+  schema:startDate xsd:date ?;
+  schema:endDate xsd:date ?;
+  sp:status [ sp:InProgress sp:Completed sp:NotStarted sp:Ignored ] ?;
+  sp:subTask @sp:Task *
+}

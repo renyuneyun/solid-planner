@@ -1,0 +1,48 @@
+@prefix sp: <urn:solid-planner:core#>.
+@prefix schema: <https://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix ex: <https://example.com/> .
+
+ex:task1 a sp:Task ;
+    sp:title "Task 1" ;
+    sp:description "This is the first task" ;
+    sp:priority 1 ;
+    schema:dateCreated "2023-12-01"^^xsd:date ;
+    schema:startDate "2023-12-01"^^xsd:date ;
+    schema:endDate "2023-12-07"^^xsd:date ;
+    sp:status sp:InProgress .
+
+ex:task2 a sp:Task ;
+    sp:title "Task 2" ;
+    sp:description "Wow, my second task" ;
+    sp:priority 1 ;
+    schema:dateCreated "2023-12-01"^^xsd:date ;
+    schema:startDate "2023-12-01"^^xsd:date ;
+    sp:status sp:InProgress;
+    sp:subTask ex:task2-1 .
+
+ex:task2-1 a sp:Task ;
+    sp:title "Task 2 (subtask 1)" ;
+    sp:description "A subtask of Task 2" ;
+    sp:priority 1 ;
+    schema:dateCreated "2023-12-01"^^xsd:date ;
+    schema:startDate "2023-12-01"^^xsd:date ;
+    schema:endDate "2024-12-07"^^xsd:date ;
+    sp:status sp:InProgress ;
+    sp:subTask ex:task2-1-1 .
+
+ex:task2-1-1 a sp:Task ;
+    sp:title "Task 2 (subtask 1 of subtask 1)" ;
+    sp:description "A nested subtask of Task 2" ;
+    sp:priority 1 ;
+    schema:dateCreated "2023-12-01"^^xsd:date ;
+    schema:startDate "2023-12-01"^^xsd:date ;
+    schema:endDate "2024-11-01"^^xsd:date ;
+    sp:status sp:InProgress .
+
+ex:task3 a sp:Task ;
+    sp:title "Task 3" ;
+    sp:description "A future task" ;
+    sp:priority 1 ;
+    schema:dateCreated "2025-02-16"^^xsd:date ;
+    schema:startDate "2025-12-01"^^xsd:date .
