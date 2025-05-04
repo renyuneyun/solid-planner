@@ -25,6 +25,6 @@ export function isOverdue(task: TaskClass) {
 }
 
 export function endOfWeek(date: Date) {
-  const today = new Date(date)
-  return new Date(today.setDate(today.getDate() - today.getDay() + 7))
+  const day = new Date(date)
+  return new Date(day.setDate(day.getDate() - day.getDay() + 7))
 }

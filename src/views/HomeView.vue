@@ -13,12 +13,12 @@
         </div>
       </header>
     </div>
-    <enhanced-task-manager />
+    <TaskManager />
   </main>
 </template>
 
 <script setup lang="ts">
-import EnhancedTaskManager from '@/components/TaskManager.vue'
+import TaskManager from '@/components/TaskManager.vue'
 import { useSessionStore } from 'solid-helper-vue'
 
 const sessionStore = useSessionStore()

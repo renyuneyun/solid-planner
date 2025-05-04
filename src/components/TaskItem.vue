@@ -1,171 +1,227 @@
+<!-- filepath: src/components/TaskItem.vue -->
 <template>
-  <div class="task-item" :class="[{ overdue: isOverdue }]">
-    <div class="task-header">
-      <input
-        type="checkbox"
-        v-model="task.completed"
-        @change="emitToggleDone"
-      />
-      <div class="task-meta">
-        <h4>{{ task.name }}</h4>
-        <p v-if="task.description">{{ task.description }}</p>
-        <div class="start-date" v-if="!isOverdue">
-          Start: {{ formatDate(task.effectiveStartDate) }}
-        </div>
-        <div class="due-date" v-else>
-          Due: {{ formatDate(props.task.effectiveEndDate) }}
-          <span v-if="isOverdue" class="overdue-label">(OVERDUE)</span>
-        </div>
+  <div
+    class="task-item"
+    :class="{
+      'task-completed': task.status === Status.COMPLETED,
+      'task-ignored': task.status === Status.IGNORED,
+    }"
+    :style="{ marginLeft: `${level * 20}px` }"
+  >
+    <div class="task-item-content" @click="$emit('select', task)">
+      <div class="task-drag-handle">
+        <i class="pi pi-bars"></i>
       </div>
-      <button @click="emitEdit" class="edit-btn">✍️</button>
-      <button @click="emitDelete" class="delete-btn">🗑️</button>
-    </div>
 
-    <div v-if="task.subTasks.length" class="subtasks">
-      <div
-        v-for="(subtask, index) in task.subTasks"
-        :key="index"
-        class="subtask"
-      >
-        <task-item
-          :task="subtask"
-          @toggle-done="emitToggleDone"
-          @edit="emitEdit"
-          @delete="emitDelete"
+      <div class="task-expand" v-if="hasSubtasks" @click.stop="toggleExpand">
+        <i
+          :class="isExpanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+        ></i>
+      </div>
+      <div class="task-expand" v-else>
+        <i class="pi pi-circle-fill"></i>
+      </div>
+
+      <div class="task-name">{{ task.name }}</div>
+
+      <div class="task-status">
+        <Tag
+          :value="getStatusLabel(task.status)"
+          :severity="getStatusSeverity(task.status)"
+        />
+      </div>
+
+      <div class="task-date">
+        {{ task.endDate ? formatDate(task.endDate) : '-' }}
+      </div>
+
+      <div class="task-actions">
+        <Button
+          icon="pi pi-trash"
+          text
+          severity="danger"
+          @click.stop="$emit('delete', task.id)"
         />
       </div>
     </div>
 
-    <div class="task-progress">
-      <div
-        class="task-progress-bar"
-        :style="{ width: completionPercentage + '%' }"
-      ></div>
-    </div>
+    <!-- Recursively render subtasks -->
+    <draggable
+      v-if="hasSubtasks && isExpanded"
+      v-model="task.subTasks"
+      group="tasks"
+      item-key="id"
+      handle=".task-drag-handle"
+      ghost-class="ghost-task"
+      :style="{ marginLeft: '20px' }"
+    >
+      <template #item="{ element }">
+        <task-item
+          :task="element"
+          :level="level + 1"
+          :expanded="expandedTasks.has(element.id)"
+          :expanded-tasks="expandedTasks"
+          @select="$emit('select', $event)"
+          @toggle="$emit('toggle', $event)"
+          @delete="$emit('delete', $event)"
+        />
+      </template>
+    </draggable>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, PropType } from 'vue'
-import { TaskClass } from '@/types/task'
-import { isOverdue as isOverdueF } from '@/utils/datetime'
+import { computed } from 'vue'
+import { TaskClass, Status } from '@/types/task'
+import draggable from 'vuedraggable'
+import { format } from 'date-fns'
+import Tag from 'primevue/tag'
 
-const props = defineProps({
-  task: {
-    type: Object as PropType<TaskClass>,
-    required: true,
-  },
+const props = defineProps<{
+  task: TaskClass
+  level: number
+  expanded: boolean
+  expandedTasks: Set<string>
+}>()
+
+const emit = defineEmits<{
+  (e: 'select', task: TaskClass): void
+  (e: 'toggle', taskId: string): void
+  (e: 'delete', taskId: string): void
+}>()
+
+// Check if has subtasks
+const hasSubtasks = computed(() => {
+  return props.task.subTasks && props.task.subTasks.length > 0
 })
 
-const emit = defineEmits(['toggleDone', 'edit', 'delete'])
-
-function formatDate(date: Date) {
-  return date.toLocaleDateString(undefined, {
-    year: 'numeric',
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
-}
-
-const isOverdue = computed(() => isOverdueF(props.task))
-
-const completionPercentage = computed(() => {
-  if (!props.task.subTasks.length) return props.task.completed ? 100 : 0
-  const completed = props.task.subTasks.filter(t => t.completed).length
-  return (completed / props.task.subTasks.length) * 100
+// Check if task is expanded
+const isExpanded = computed(() => {
+  // This needs to sync with parent component's expanded list
+  return props.expanded
 })
 
-const effectiveEndDate = computed(() => props.task.effectiveEndDate)
-const effectiveStartDate = computed(() => props.task.effectiveStartDate)
-
-function emitToggleDone() {
-  emit('toggleDone', props.task.id, !props.task.completed)
+// Toggle expand state
+function toggleExpand(event: Event) {
+  event.stopPropagation()
+  emit('toggle', props.task.id)
 }
 
-function emitEdit() {
-  emit('edit', props.task.id)
+// Format date
+function formatDate(date: Date): string {
+  try {
+    return format(new Date(date), 'yyyy-MM-dd')
+  } catch (e) {
+    return '-'
+  }
 }
 
-function emitDelete() {
-  emit('delete', props.task.id)
+// Get status corresponding label
+function getStatusLabel(status?: Status): string {
+  switch (status) {
+    case Status.IN_PROGRESS:
+      return 'In Progress'
+    case Status.COMPLETED:
+      return 'Completed'
+    case Status.IGNORED:
+      return 'Ignored'
+    default:
+      return 'Not Started'
+  }
+}
+
+// Get status corresponding color
+function getStatusSeverity(status?: Status): string {
+  switch (status) {
+    case Status.IN_PROGRESS:
+      return 'info'
+    case Status.COMPLETED:
+      return 'success'
+    case Status.IGNORED:
+      return 'secondary'
+    default:
+      return 'warning'
+  }
 }
 </script>
 
-<style>
+<style scoped>
 .task-item {
-  background: white;
-  border-left: 4px solid;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid #f5f5f5;
 }
 
-.task-item.high {
-  border-color: #ff5252;
-}
-.task-item.medium {
-  border-color: #ffc107;
-}
-.task-item.low {
-  border-color: #4caf50;
-}
-
-.task-item.overdue {
-  background: #fff0f0;
-  border-color: #c62828;
-}
-
-.task-header {
+.task-item-content {
   display: flex;
   align-items: center;
-  gap: 1rem;
-}
-
-.start-date {
-  font-size: 0.9em;
-  color: #666;
-}
-
-.due-date {
-  font-size: 0.9em;
-  color: #666;
-}
-
-.overdue-label {
-  color: #c62828;
-  font-weight: bold;
-}
-
-.subtasks {
-  margin-left: 2rem;
-  margin-top: 0.5rem;
-}
-
-.subtask {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9em;
-}
-
-.subtask-due {
-  font-size: 0.8em;
-  color: #999;
-}
-
-.delete-btn {
-  margin-left: auto;
-  background: none;
-  border: none;
-  font-size: 1.2em;
+  padding: 0.75rem 1rem;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.task-item-content:hover {
+  background-color: #f9f9f9;
+}
+
+.task-drag-handle {
+  cursor: grab;
+  padding: 0 0.5rem;
+  color: #ccc;
+}
+
+.task-drag-handle:hover {
   color: #666;
 }
 
-.completed {
+.task-expand {
+  margin-right: 0.5rem;
+  width: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.task-expand i.pi-circle-fill {
+  font-size: 0.5rem;
+  color: #ccc;
+}
+
+.task-name {
+  flex: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-status {
+  flex: 1;
+}
+
+.task-date {
+  flex: 1;
+  color: #6c757d;
+}
+
+.task-actions {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+  visibility: hidden;
+}
+
+.task-item-content:hover .task-actions {
+  visibility: visible;
+}
+
+.task-completed .task-name {
   text-decoration: line-through;
-  opacity: 0.7;
+  color: #6c757d;
+}
+
+.task-ignored .task-name {
+  color: #adb5bd;
+}
+
+.ghost-task {
+  opacity: 0.5;
+  background: #f0f0f0;
 }
 </style>

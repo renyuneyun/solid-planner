@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { Task } from '@/ldo/task.typings'
-import { TaskClass } from '@/types/task'
+import { Status, TaskClass, createTaskClassMapFromLdoTasks } from '@/types/task'
 import dummyTaskUrl from '@/data/mock-tasks.ttl?url'
 import { parseRdf } from 'ldo'
 import { URL_EX, NS_SP } from '@/constants/ns'
@@ -38,24 +38,13 @@ export const useTaskStore = defineStore('tasks', {
       return this.tasks.filter(task =>
         task.endDate
           ? new Date(task.endDate) < new Date() &&
-            task.status !== 'completed' &&
-            task.status !== 'ignored'
+            task.status !== Status.COMPLETED &&
+            task.status !== Status.IGNORED
           : false,
       )
     },
     tasks(state): TaskClass[] {
-      const taskObjMap = new Map<string, TaskClass>()
-      state.ldoTasks.forEach((task, id) => {
-        taskObjMap.set(id, TaskClass.fromLdoTask(task))
-      })
-      taskObjMap.forEach((task, id) => {
-        for (const sub of task.subTasks) {
-          const subTask = taskObjMap.get(sub.id)
-          if (subTask) {
-            subTask.parent = task
-          }
-        }
-      })
+      const taskObjMap = createTaskClassMapFromLdoTasks(state.ldoTasks)
       return [...taskObjMap.values()]
     },
     rootTasks(state): TaskClass[] {
@@ -65,7 +54,7 @@ export const useTaskStore = defineStore('tasks', {
       console.log(
         `Got 0th layer tasks: ${JSON.stringify(
           ret.map(task => {
-            return [task.name, task.parent]
+            return [task.name, task.status]
           }),
           null,
           2,
@@ -100,24 +89,21 @@ export const useTaskStore = defineStore('tasks', {
      * @param task
      */
     async addTask(task: Task) {
-      this.ldoTasks.push(task)
+      this.ldoTasks.set(task['@id']!, task)
     },
     /**
      * TODO: Implement
      * @param task
      */
     async removeTask(task: Task) {
-      this.ldoTasks = this.ldoTasks.filter(t => t !== task)
+      this.ldoTasks.delete(task['@id']!)
     },
     /**
      * TODO: Implement
      * @param task
      */
     async updateTask(task: Task) {
-      const index = this.ldoTasks.findIndex(t => t === task)
-      if (index !== -1) {
-        this.ldoTasks[index] = task
-      }
+      this.ldoTasks.set(task['@id']!, task)
     },
   },
 })
