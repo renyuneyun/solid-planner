@@ -10,6 +10,7 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import ConfirmationService from 'primevue/confirmationservice'
 import Toast from 'primevue/toast'
 import ToastService from 'primevue/toastservice'
+import Tooltip from 'primevue/tooltip'
 import 'primeicons/primeicons.css'
 
 import App from './App.vue'
@@ -28,5 +29,6 @@ app.use(PrimeVue, {
 app.use(DialogService)
 app.use(ToastService)
 app.use(ConfirmationService)
+app.directive('tooltip', Tooltip)
 
 app.mount('#app')

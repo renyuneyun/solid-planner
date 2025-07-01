@@ -9,6 +9,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AuthProvider: typeof import('./src/components/AuthProvider.vue')['default']
+    Avatar: typeof import('primevue/avatar')['default']
     Button: typeof import('primevue/button')['default']
     Calendar: typeof import('primevue/calendar')['default']
     ConfirmDialog: typeof import('primevue/confirmdialog')['default']
@@ -28,6 +29,8 @@ declare module 'vue' {
     TaskItem: typeof import('./src/components/TaskItem.vue')['default']
     TaskManager: typeof import('./src/components/TaskManager.vue')['default']
     Textarea: typeof import('primevue/textarea')['default']
+    Toast: typeof import('primevue/toast')['default']
+    TopBar: typeof import('./src/components/TopBar.vue')['default']
   }
   export interface ComponentCustomProperties {
     Tooltip: typeof import('primevue/tooltip')['default']
