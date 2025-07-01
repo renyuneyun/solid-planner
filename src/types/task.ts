@@ -34,7 +34,7 @@ export class TaskClass implements TaskClassContent {
   endDate?: Date
   status?: Status
   subTasks: TaskClass[] = []
-  _parent?: TaskClass = undefined
+  parent?: TaskClass = undefined
   ldoObj?: Task
 
   constructor({
@@ -63,7 +63,7 @@ export class TaskClass implements TaskClassContent {
       }
     }
 
-    this._parent = parent
+    this.parent = parent
   }
 
   /**
@@ -159,30 +159,6 @@ export class TaskClass implements TaskClassContent {
     }
     this.subTasks = []
   }
-
-  get parent(): TaskClass | undefined {
-    console.log(`Getting parent of task ${this.name}: ${this._parent?.name}`)
-    return this._parent
-  }
-
-  /**
-   * Set the parent task for the current task.
-   * It will handle subtask references automatically.
-   */
-  set parent(newParent: TaskClass | undefined) {
-    if (this._parent === newParent) return
-
-    if (this._parent) {
-      this._parent.removeSubTask(this)
-    }
-
-    if (newParent) {
-      newParent.addSubTask(this)
-    } else {
-      // Note: Do not set the parent reference here to avoid infinite recursion. Only set it in the addSubTask method, or here if undefined.
-      this._parent = undefined
-    }
-  }
 }
 
 export function createTaskClassMapFromLdoTasks(
@@ -190,17 +166,11 @@ export function createTaskClassMapFromLdoTasks(
 ): Map<string, TaskClass> {
   const taskObjMap = new Map<string, TaskClass>()
   ldoTasks.forEach((ldoTask, id) => {
-    console.log(`Creating task ${ldoTask.title} with id ${id} from LDO task`)
     const task = TaskClass.basicFromLdoTask(ldoTask)
     taskObjMap.set(id, task)
-    console.log(`Created task ${task.name} with id ${id} from LDO task`)
   })
   taskObjMap.forEach((task, id) => {
-    console.log(
-      `Filling refs for task ${task.name} with id ${id}. Children: ${task.ldoObj!.subTask?.length}`,
-    )
     task.fillRefsFromMap(taskObjMap)
-    console.log(`Filled refs for task ${task.name} with id ${id}`)
   })
   return taskObjMap
 }
