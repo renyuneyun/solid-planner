@@ -10,6 +10,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AuthProvider: typeof import('./src/components/AuthProvider.vue')['default']
     Avatar: typeof import('primevue/avatar')['default']
+    BrandLogo: typeof import('./src/components/TopBar/BrandLogo.vue')['default']
     Button: typeof import('primevue/button')['default']
     Calendar: typeof import('primevue/calendar')['default']
     ConfirmDialog: typeof import('primevue/confirmdialog')['default']
@@ -22,7 +23,9 @@ declare module 'vue' {
     IconSupport: typeof import('./src/components/icons/IconSupport.vue')['default']
     IconTooling: typeof import('./src/components/icons/IconTooling.vue')['default']
     InputText: typeof import('primevue/inputtext')['default']
+    LoginDialog: typeof import('./src/components/TopBar/LoginDialog.vue')['default']
     LoginProvider: typeof import('./src/components/LoginProvider.vue')['default']
+    Navigation: typeof import('./src/components/TopBar/Navigation.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TaskForm: typeof import('./src/components/TaskForm.vue')['default']
@@ -31,6 +34,7 @@ declare module 'vue' {
     Textarea: typeof import('primevue/textarea')['default']
     Toast: typeof import('primevue/toast')['default']
     TopBar: typeof import('./src/components/TopBar.vue')['default']
+    UserSection: typeof import('./src/components/TopBar/UserSection.vue')['default']
   }
   export interface ComponentCustomProperties {
     Tooltip: typeof import('primevue/tooltip')['default']
