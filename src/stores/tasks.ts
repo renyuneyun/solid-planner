@@ -1,12 +1,7 @@
 import { defineStore } from 'pinia'
 import { Task } from '@/ldo/task.typings'
 import { Status, TaskClass, createTaskClassMapFromLdoTasks } from '@/types/task'
-import dummyTaskUrl from '@/data/mock-tasks.ttl?url'
-import { parseRdf } from 'ldo'
-import { URL_EX, NS_SP } from '@/constants/ns'
-import { TaskShapeType } from '@/ldo/task.shapeTypes'
 import dataFactory from '@rdfjs/data-model'
-import { RDF } from '@inrupt/vocab-common-rdf'
 
 const { namedNode } = dataFactory
 
@@ -64,22 +59,7 @@ export const useTaskStore = defineStore('tasks', {
     },
   },
   actions: {
-    async fetchTasks(containerUri?: string) {
-      // Implementation with typed Solid client
-      const response = await fetch(dummyTaskUrl)
-      const text = await response.text()
-      console.log(`Got tasks Turtle: ${text}`)
-
-      const ldoDataset = await parseRdf(text, {
-        baseIRI: URL_EX,
-      })
-
-      const tasks = ldoDataset
-        .usingType(TaskShapeType)
-        .matchSubject(RDF.type, NS_SP('Task'))
-
-      console.log(`Got ldoTasks: ${JSON.stringify(tasks, null, 2)}`)
-
+    loadTasks(tasks: Task[]) {
       tasks.forEach(task => {
         this.ldoTasks.set(task['@id']!, task)
       })

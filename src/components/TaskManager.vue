@@ -1,15 +1,9 @@
-<!-- filepath: /home/ryey/coding/solid-planner/src/components/TaskManager.vue -->
 <template>
   <div class="task-manager">
     <div class="task-manager-header">
       <h1>Task Management</h1>
       <div class="quick-add">
-        <InputText
-          v-model="newTaskName"
-          placeholder="Add new task..."
-          @keydown.enter="addQuickTask"
-          class="w-full"
-        />
+        <InputText v-model="newTaskName" placeholder="Add new task..." @keydown.enter="addQuickTask" class="w-full" />
         <Button icon="pi pi-plus" @click="addQuickTask" />
         <Button icon="pi pi-bars" @click="openNewTaskDrawer" />
       </div>
@@ -24,25 +18,12 @@
             <span class="date-column">Due Date</span>
             <span class="actions-column">Actions</span>
           </div>
-          <draggable
-            v-model="tasks"
-            group="tasks"
-            item-key="id"
-            handle=".task-drag-handle"
-            @end="onDragEnd"
-            ghost-class="ghost-task"
-            class="task-draggable"
-          >
+          <draggable v-model="tasks" group="tasks" item-key="id" handle=".task-drag-handle" @end="onDragEnd"
+            ghost-class="ghost-task" class="task-draggable">
             <template #item="{ element, index }">
-              <task-item
-                :task="element"
-                :level="0"
-                :expanded="expandedTaskIds.has(element.id)"
-                :expanded-tasks="expandedTaskIds"
-                @select="selectTask"
-                @toggle="toggleTaskExpanded"
-                @delete="deleteTask"
-              />
+              <task-item :task="element" :level="0" :expanded="expandedTaskIds.has(element.id)"
+                :expanded-tasks="expandedTaskIds" @select="selectTask" @toggle="toggleTaskExpanded"
+                @delete="deleteTask" />
             </template>
           </draggable>
         </template>
@@ -54,43 +35,22 @@
     </div>
 
     <!-- Task drawer (shared for editing and creating new tasks) -->
-    <div
-      class="detail-overlay"
-      :class="{ visible: isDrawerOpen }"
-      @click="closeDrawer"
-    ></div>
+    <div class="detail-overlay" :class="{ visible: isDrawerOpen }" @click="closeDrawer"></div>
 
     <div class="task-drawer" :class="{ visible: isDrawerOpen }">
       <div class="drawer-header">
         <h2>{{ drawerMode === 'edit' ? 'Task Details' : 'Create New Task' }}</h2>
-        <Button
-          icon="pi pi-times"
-          text
-          @click="closeDrawer"
-          class="close-btn"
-        />
+        <Button icon="pi pi-times" text @click="closeDrawer" class="close-btn" />
       </div>
 
       <!-- Edit task mode -->
       <div v-if="drawerMode === 'edit' && selectedTask">
-        <TaskForm
-          v-model="selectedTask"
-          :showSubtasks="true"
-          :availableTasksForSubtask="availableTasksForSubtask"
-          @remove-subtask="removeSubtask"
-          @add-subtask="addSubtask"
-          class="drawer-form"
-        >
+        <TaskForm v-model="selectedTask" :showSubtasks="true" :availableTasksForSubtask="availableTasksForSubtask"
+          @remove-subtask="removeSubtask" @add-subtask="addSubtask" class="drawer-form">
           <template #actions>
             <div class="actions">
               <Button label="Save" icon="pi pi-check" @click="saveTask" />
-              <Button
-                label="Delete"
-                icon="pi pi-trash"
-                severity="danger"
-                text
-                @click="confirmDelete"
-              />
+              <Button label="Delete" icon="pi pi-trash" severity="danger" text @click="confirmDelete" />
             </div>
           </template>
         </TaskForm>
@@ -101,12 +61,7 @@
         <TaskForm v-model="newTask" class="drawer-form">
           <template #actions>
             <div class="actions">
-              <Button
-                label="Cancel"
-                icon="pi pi-times"
-                text
-                @click="closeDrawer"
-              />
+              <Button label="Cancel" icon="pi pi-times" text @click="closeDrawer" />
               <Button label="Create" icon="pi pi-check" @click="createNewTask" />
             </div>
           </template>
@@ -120,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { v4 as uuidv4 } from 'uuid'
 import { TaskClass, Status } from '@/types/task'
@@ -128,6 +83,9 @@ import draggable from 'vuedraggable'
 import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
 import { useTaskStore } from '@/stores/tasks'
+import { useSessionStore } from 'solid-helper-vue'
+import { findStorage } from '@renyuneyun/solid-helper'
+import { fetchTasks } from '@/utils/queries'
 
 // Use confirm dialog
 const confirm = useConfirm()
@@ -424,14 +382,35 @@ function updateTaskRelationships() {
   updateRelationships(tasks.value)
 }
 
-onMounted(async () => {
-  const taskStore = useTaskStore()
-  await taskStore.fetchTasks()
-  tasks.value = taskStore.rootTasks
+// Extracted logic for loading tasks based on session
+const sessionStore = useSessionStore()
+const taskStore = useTaskStore()
 
-  // Update parent-child relationships
+async function loadTasksForSession() {
+  if (!sessionStore.webid) {
+    return
+  }
+  const storageUrl = await findStorage(sessionStore.webid)
+  if (!storageUrl) {
+    console.error('No storage found for current WebID')
+    return
+  }
+  console.log('Loading tasks from storage:', storageUrl)
+  const remoteTasks = await fetchTasks(storageUrl, sessionStore.session.fetch);
+  taskStore.loadTasks(remoteTasks)
+  tasks.value = taskStore.rootTasks
   updateTaskRelationships()
-})
+}
+
+watch(
+  () => sessionStore.webid,
+  async (newWebid, oldWebid) => {
+    if (newWebid !== oldWebid) {
+      await loadTasksForSession()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -504,14 +483,17 @@ onMounted(async () => {
 .name-column {
   flex: 4;
 }
+
 .status-column {
   flex: 1;
   text-align: center;
 }
+
 .date-column {
   flex: 2;
   text-align: center;
 }
+
 .actions-column {
   flex: 1;
   text-align: right;
