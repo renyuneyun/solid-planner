@@ -37,14 +37,14 @@ export function useSolidTasks() {
 
       solidService.value = createSolidTaskService(
         storageUrl,
-        sessionStore.session.fetch
+        sessionStore.session.fetch,
       )
 
       // Ensure the resource exists before any read/write
       await solidService.value.ensureResourceExists()
-      console.log('Solid service initialized:', storageUrl)
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to initialize service'
+      error.value =
+        err instanceof Error ? err.message : 'Failed to initialize service'
       console.error('Failed to initialize Solid service:', err)
     }
   }
@@ -64,7 +64,6 @@ export function useSolidTasks() {
     try {
       const tasks = await solidService.value.fetchTasks()
       taskStore.loadTasks(tasks)
-      console.log(`Loaded ${tasks.length} tasks from Pod`)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
       console.error('Failed to load tasks:', err)
@@ -95,7 +94,6 @@ export function useSolidTasks() {
 
       // Save to Pod
       await solidService.value.saveTaskClasses(taskClasses)
-      console.log(`Saved ${taskClasses.length} tasks to Pod`)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to save tasks'
       console.error('Failed to save tasks:', err)
@@ -144,7 +142,8 @@ export function useSolidTasks() {
     try {
       await solidService.value.ensureResourceExists()
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to ensure resource exists'
+      error.value =
+        err instanceof Error ? err.message : 'Failed to ensure resource exists'
       console.error('Failed to ensure resource exists:', err)
     }
   }
@@ -152,7 +151,7 @@ export function useSolidTasks() {
   // Watch for authentication changes
   watch(
     () => sessionStore.webid,
-    async (newWebId) => {
+    async newWebId => {
       if (newWebId) {
         await initializeService()
         await loadFromPod()
@@ -162,8 +161,23 @@ export function useSolidTasks() {
         taskStore.clearTasks()
       }
     },
-    { immediate: true }
+    { immediate: true },
   )
+
+  /**
+   * Rebuild task store relationships after UI modifications
+   * This ensures parent-child relationships are properly synced
+   */
+  function rebuildTaskRelationships() {
+    taskStore.rebuildRelationships()
+  }
+
+  /**
+   * Get the task resource URL for converting tasks to LDO format
+   */
+  function getTaskResourceUrl(): string {
+    return solidService.value?.getTaskResourceUrl() ?? ''
+  }
 
   return {
     // State
@@ -180,5 +194,7 @@ export function useSolidTasks() {
     updateTaskAndSave,
     removeTaskAndSave,
     ensureResourceExists,
+    rebuildTaskRelationships,
+    getTaskResourceUrl,
   }
 }

@@ -3,7 +3,12 @@
     <div class="task-manager-header">
       <h1>Task Management</h1>
       <div class="quick-add">
-        <InputText v-model="newTaskName" placeholder="Add new task..." @keydown.enter="addQuickTask" class="w-full" />
+        <InputText
+          v-model="newTaskName"
+          placeholder="Add new task..."
+          @keydown.enter="addQuickTask"
+          class="w-full"
+        />
         <Button icon="pi pi-plus" @click="addQuickTask" />
         <Button icon="pi pi-bars" @click="openNewTaskDrawer" />
       </div>
@@ -18,12 +23,25 @@
             <span class="date-column">Due Date</span>
             <span class="actions-column">Actions</span>
           </div>
-          <draggable v-model="tasks" group="tasks" item-key="id" handle=".task-drag-handle" @end="onDragEnd"
-            ghost-class="ghost-task" class="task-draggable">
+          <draggable
+            v-model="tasks"
+            group="tasks"
+            item-key="id"
+            handle=".task-drag-handle"
+            @end="onDragEnd"
+            ghost-class="ghost-task"
+            class="task-draggable"
+          >
             <template #item="{ element, index }">
-              <task-item :task="element" :level="0" :expanded="expandedTaskIds.has(element.id)"
-                :expanded-tasks="expandedTaskIds" @select="selectTask" @toggle="toggleTaskExpanded"
-                @delete="deleteTask" />
+              <task-item
+                :task="element"
+                :level="0"
+                :expanded="expandedTaskIds.has(element.id)"
+                :expanded-tasks="expandedTaskIds"
+                @select="selectTask"
+                @toggle="toggleTaskExpanded"
+                @delete="deleteTask"
+              />
             </template>
           </draggable>
         </template>
@@ -35,22 +53,45 @@
     </div>
 
     <!-- Task drawer (shared for editing and creating new tasks) -->
-    <div class="detail-overlay" :class="{ visible: isDrawerOpen }" @click="closeDrawer"></div>
+    <div
+      class="detail-overlay"
+      :class="{ visible: isDrawerOpen }"
+      @click="closeDrawer"
+    ></div>
 
     <div class="task-drawer" :class="{ visible: isDrawerOpen }">
       <div class="drawer-header">
-        <h2>{{ drawerMode === 'edit' ? 'Task Details' : 'Create New Task' }}</h2>
-        <Button icon="pi pi-times" text @click="closeDrawer" class="close-btn" />
+        <h2>
+          {{ drawerMode === 'edit' ? 'Task Details' : 'Create New Task' }}
+        </h2>
+        <Button
+          icon="pi pi-times"
+          text
+          @click="closeDrawer"
+          class="close-btn"
+        />
       </div>
 
       <!-- Edit task mode -->
       <div v-if="drawerMode === 'edit' && selectedTask">
-        <TaskForm v-model="selectedTask" :showSubtasks="true" :availableTasksForSubtask="availableTasksForSubtask"
-          @remove-subtask="removeSubtask" @add-subtask="addSubtask" class="drawer-form">
+        <TaskForm
+          v-model="selectedTask"
+          :showSubtasks="true"
+          :availableTasksForSubtask="availableTasksForSubtask"
+          @remove-subtask="removeSubtask"
+          @add-subtask="addSubtask"
+          class="drawer-form"
+        >
           <template #actions>
             <div class="actions">
               <Button label="Save" icon="pi pi-check" @click="saveTask" />
-              <Button label="Delete" icon="pi pi-trash" severity="danger" text @click="confirmDelete" />
+              <Button
+                label="Delete"
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                @click="confirmDelete"
+              />
             </div>
           </template>
         </TaskForm>
@@ -61,8 +102,17 @@
         <TaskForm v-model="newTask" class="drawer-form">
           <template #actions>
             <div class="actions">
-              <Button label="Cancel" icon="pi pi-times" text @click="closeDrawer" />
-              <Button label="Create" icon="pi pi-check" @click="createNewTask" />
+              <Button
+                label="Cancel"
+                icon="pi pi-times"
+                text
+                @click="closeDrawer"
+              />
+              <Button
+                label="Create"
+                icon="pi pi-check"
+                @click="createNewTask"
+              />
             </div>
           </template>
         </TaskForm>
@@ -90,9 +140,13 @@ const confirm = useConfirm()
 
 // Use Solid tasks composable for Pod integration
 const taskStore = useTaskStore()
-const { isLoading, error: solidError, saveToPod } = useSolidTasks()
-
-// Task list data from store
+const {
+  isLoading,
+  error: solidError,
+  saveToPod,
+  rebuildTaskRelationships,
+  getTaskResourceUrl,
+} = useSolidTasks()
 const tasks = computed(() => taskStore.rootTasks)
 
 // List of expanded task IDs
@@ -171,7 +225,7 @@ async function addQuickTask() {
   const ldoTask = task.toLdoTask()
   await taskStore.addTask(ldoTask)
   newTaskName.value = ''
-  
+
   // Save to Pod
   try {
     await saveToPod()
@@ -222,7 +276,7 @@ async function createNewTask() {
   const ldoTask = task.toLdoTask()
   await taskStore.addTask(ldoTask)
   closeDrawer()
-  
+
   // Save to Pod
   try {
     await saveToPod()
@@ -265,11 +319,11 @@ function findTaskById(taskId: string): TaskClass | null {
 }
 
 // Add subtask
-async function addSubtask(taskId: string) {
+async function addSubtask(subtaskId: string) {
   if (!selectedTask.value) return
 
   // Find the task to add as subtask
-  const taskToAdd = findTaskById(taskId)
+  const taskToAdd = findTaskById(subtaskId)
   if (!taskToAdd) return
 
   // Remove from original position
@@ -289,7 +343,7 @@ async function addSubtask(taskId: string) {
   }
 
   // Remove from top-level tasks
-  removeFromParent(tasks.value, taskId)
+  removeFromParent(tasks.value, subtaskId)
 
   // Set parent task relationship
   taskToAdd.parent = selectedTask.value
@@ -297,14 +351,22 @@ async function addSubtask(taskId: string) {
   // Add to subtask list
   selectedTask.value.subTasks.push(taskToAdd)
 
-  // Update parent-child relationships
+  // Update parent-child relationships in memory
   updateTaskRelationships()
 
-  // Save updated tasks to Pod
+  // Update the store with the modified tasks
+  // This must happen BEFORE rebuildTaskRelationships() so we don't lose the changes
   const taskStore = useTaskStore()
-  taskStore.updateTask(selectedTask.value.toLdoTask())
-  taskStore.updateTask(taskToAdd.toLdoTask())
-  
+  const baseUri = getTaskResourceUrl()
+  const parentLdo = selectedTask.value.toLdoTask(baseUri)
+  const childLdo = taskToAdd.toLdoTask(baseUri)
+
+  taskStore.updateTask(parentLdo)
+  taskStore.updateTask(childLdo)
+
+  // Now rebuild relationships in the store to sync everything
+  rebuildTaskRelationships()
+
   try {
     await saveToPod()
   } catch (error) {
@@ -313,27 +375,26 @@ async function addSubtask(taskId: string) {
 }
 
 // Remove subtask from parent task
-const removeSubtask = async (parentId: string, subtaskId: string) => {
-  const parent = taskMap.value.get(parentId)
-  const subtask = taskMap.value.get(subtaskId)
+const removeSubtask = async (subtaskId: string) => {
+  if (!selectedTask.value) return
 
-  if (parent && subtask) {
-    parent.removeSubTask(subtaskId)
-    subtask.parentTaskId = undefined
-    updateTaskRelationships()
+  const subtask = findTaskById(subtaskId)
+  if (!subtask) return
 
-    // Save updated parent and subtask to Pod
-    const ldoParent = parent.toLdoTask()
-    const ldoSubtask = subtask.toLdoTask()
-    const taskStore = useTaskStore()
-    taskStore.updateTask(ldoParent)
-    taskStore.updateTask(ldoSubtask)
-    
-    try {
-      await saveToPod()
-    } catch (error) {
-      console.error('Failed to save subtask removal to Pod:', error)
-    }
+  // Remove the subtask from the currently selected task (parent)
+  selectedTask.value.removeSubTask(subtask)
+  updateTaskRelationships()
+
+  // Save updated parent and subtask to Pod
+  const ldoParent = selectedTask.value.toLdoTask()
+  const ldoSubtask = subtask.toLdoTask()
+  taskStore.updateTask(ldoParent)
+  taskStore.updateTask(ldoSubtask)
+
+  try {
+    await saveToPod()
+  } catch (error) {
+    console.error('Failed to save subtask removal to Pod:', error)
   }
 }
 
@@ -377,7 +438,7 @@ function confirmDelete() {
     accept: async () => {
       const taskToDelete = selectedTask.value!
       deleteTask(taskToDelete.id)
-      
+
       // Save to Pod after deletion
       try {
         await saveToPod()

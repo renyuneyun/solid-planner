@@ -1,48 +1,72 @@
-import { createSolidLdoDataset } from "@ldo/connected-solid";
-import { RDF } from '@inrupt/vocab-common-rdf';
-import { TaskShapeType } from '@/ldo/task.shapeTypes';
-import { Task } from '@/ldo/task.typings';
-import { TaskClass } from '@/types/task';
-import { withTrailingSlash } from './url';
+import { createSolidLdoDataset } from '@ldo/connected-solid'
+import { RDF } from '@inrupt/vocab-common-rdf'
+import { TaskShapeType } from '@/ldo/task.shapeTypes'
+import { Task } from '@/ldo/task.typings'
+import { TaskClass } from '@/types/task'
+import { withTrailingSlash } from './url'
 
-const TASK_RESOURCE_NAME = 'tasks.ttl';
+const TASK_RESOURCE_NAME = 'tasks.ttl'
 
 /**
  * Service for reading and writing tasks to/from a Solid Pod
  */
 export class SolidTaskService {
-  private ldoDataset = createSolidLdoDataset();
-  private taskResourceUrl: string;
+  private ldoDataset = createSolidLdoDataset()
+  private taskResourceUrl: string
 
   constructor(podRootUri: string, authFetch: typeof fetch) {
-    this.taskResourceUrl = `${withTrailingSlash(podRootUri)}planner/${TASK_RESOURCE_NAME}`;
-    this.ldoDataset.setContext("solid", { fetch: authFetch });
+    this.taskResourceUrl = `${withTrailingSlash(podRootUri)}planner/${TASK_RESOURCE_NAME}`
+    this.ldoDataset.setContext('solid', { fetch: authFetch })
+  }
+
+  /**
+   * Get the task resource URL (base URI for task IDs)
+   */
+  getTaskResourceUrl(): string {
+    return this.taskResourceUrl
   }
 
   /**
    * Fetch all tasks from the Solid Pod
    */
   async fetchTasks(): Promise<Task[]> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl);
-    const readResult = await resource.read();
+    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
+    const readResult = await resource.read()
 
     if (readResult.isError) {
       // Resource doesn't exist yet or other error - return empty array
-      console.warn(`Could not read tasks: ${readResult.type}`);
-      return [];
+      return []
     }
 
     // Check if resource is absent (404)
     if (readResult.type === 'absentReadSuccess') {
-      return [];
+      console.log('Task resource not found (404) - returning empty array')
+      return []
     }
 
-    // Match by the schema.org Action type declared in the shape context
-    const tasksSet = this.ldoDataset
-      .usingType(TaskShapeType)
-      .matchSubject(RDF.type, 'https://schema.org/Action');
+    try {
+      // Query for all subjects with rdf:type schema:org/Action
+      // The matchSubject() should return an LdSet of matching tasks
+      const tasksSet = this.ldoDataset
+        .usingType(TaskShapeType)
+        .matchSubject(RDF.type, 'https://schema.org/Action')
 
-    return Array.from(tasksSet) as Task[];
+      // Convert the LdSet to an array
+      const tasksArray: Task[] = []
+      for (const task of tasksSet) {
+        try {
+          // Safely access task properties
+          const taskObj = task as Task
+          tasksArray.push(taskObj)
+        } catch (taskErr) {
+          // Continue with other tasks
+        }
+      }
+
+      return tasksArray
+    } catch (err) {
+      throw err
+    }
   }
 
   /**
@@ -50,54 +74,96 @@ export class SolidTaskService {
    * @param tasks Array of Task objects to save
    */
   async saveTasks(tasks: Task[]): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl);
+    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
 
     // Ensure resource is loaded
-    await resource.readIfUnfetched();
+    await resource.readIfUnfetched()
 
-    // Start a transaction to update the dataset
-    const transaction = this.ldoDataset.startTransaction();
+    // Start a fresh transaction - writing will overwrite existing data for the same subjects
+    const transaction = this.ldoDataset.startTransaction()
 
-    // Write all tasks
-    tasks.forEach((task) => {
+    // Write all tasks fresh
+    tasks.forEach(task => {
       const ldoTask = transaction
         .usingType(TaskShapeType)
-        .write(this.taskResourceUrl)
-        .fromSubject(task['@id']!);
+        .write(resource.uri)
+        .fromSubject(task['@id']!)
 
-      // Update all properties
-      Object.assign(ldoTask, task);
-    });
+      // Set properties individually for proper RDF handling
+      // Only set defined values to avoid invalid RDF structures
+      ldoTask.type = { '@id': 'Action' }
+      ldoTask.title = task.title
+
+      if (task.description !== undefined) {
+        ldoTask.description = task.description
+      }
+      if (task.priority !== undefined) {
+        ldoTask.priority = task.priority
+      }
+      if (task.dateCreated !== undefined) {
+        ldoTask.dateCreated = task.dateCreated
+      }
+      if (task.startDate !== undefined) {
+        ldoTask.startDate = task.startDate
+      }
+      if (task.endDate !== undefined) {
+        ldoTask.endDate = task.endDate
+      }
+      if (task.status !== undefined) {
+        ldoTask.status = task.status
+      }
+
+      if (task.subTask && task.subTask.length > 0) {
+        ldoTask.subTask = []
+        for (const subTaskRef of task.subTask) {
+          ldoTask.subTask.push(subTaskRef)
+        }
+      }
+    })
 
     // Commit the transaction to the remote Pod
-    const result = await transaction.commitToRemote();
+    const result = await transaction.commitToRemote()
 
     if (result.isError) {
-      throw new Error(`Failed to save tasks: ${result.type}`);
+      console.error('Failed to commit transaction:', result)
+      console.error('Error type:', result.type)
+      // Try to extract more details from the error
+      if (result.type === 'aggregateError' && (result as any).errors) {
+        console.error('Aggregate errors:', (result as any).errors)
+      }
+      throw new Error(`Failed to save tasks: ${result.type}`)
     }
   }
 
   /**
    * Save all TaskClass objects to the Solid Pod
    * Converts TaskClass objects to LDO Task format before saving
-   * @param taskClasses Array of TaskClass objects to save
+   * Note: Only root tasks are saved; subtasks are referenced via subTask properties
+   * @param taskClasses Array of TaskClass objects to save (should be root tasks only)
    */
   async saveTaskClasses(taskClasses: TaskClass[]): Promise<void> {
-    // Flatten all tasks (root + all subtasks recursively)
-    const flattenedTasks: Task[] = []
-    
-    const flattenTask = (tc: TaskClass) => {
-      flattenedTasks.push(tc.toLdoTask(this.taskResourceUrl))
+    // Convert all tasks (root + all subtasks) to LDO format
+    // We need to save ALL tasks (both root and nested) but only as individual task objects
+    const allTasks: Task[] = []
+    const seenIds = new Set<string>()
+
+    const collectAllTasks = (tc: TaskClass) => {
+      if (seenIds.has(tc.id)) return
+      seenIds.add(tc.id)
+
+      const ldoTask = tc.toLdoTask(this.taskResourceUrl)
+      allTasks.push(ldoTask)
+
       for (const subTask of tc.subTasks) {
-        flattenTask(subTask)
+        collectAllTasks(subTask)
       }
     }
-    
+
     for (const task of taskClasses) {
-      flattenTask(task)
+      collectAllTasks(task)
     }
-    
-    await this.saveTasks(flattenedTasks);
+
+    await this.saveTasks(allTasks)
   }
 
   /**
@@ -105,25 +171,51 @@ export class SolidTaskService {
    * @param task The task to add or update
    */
   async upsertTask(task: Task): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl);
+    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
 
     // Ensure resource exists
-    await resource.readIfUnfetched();
+    await resource.readIfUnfetched()
 
-    const transaction = this.ldoDataset.startTransaction();
+    const transaction = this.ldoDataset.startTransaction()
 
     const ldoTask = transaction
       .usingType(TaskShapeType)
-      .write(this.taskResourceUrl)
-      .fromSubject(task['@id']!);
+      .write(resource.uri)
+      .fromSubject(task['@id']!)
 
-    // Update all properties
-    Object.assign(ldoTask, task);
+    // Set properties individually for proper RDF handling
+    // Only set defined values to avoid invalid RDF structures
+    ldoTask.type = { '@id': 'Action' }
+    ldoTask.title = task.title
 
-    const result = await transaction.commitToRemote();
+    if (task.description !== undefined) {
+      ldoTask.description = task.description
+    }
+    if (task.priority !== undefined) {
+      ldoTask.priority = task.priority
+    }
+    if (task.dateCreated !== undefined) {
+      ldoTask.dateCreated = task.dateCreated
+    }
+    if (task.startDate !== undefined) {
+      ldoTask.startDate = task.startDate
+    }
+    if (task.endDate !== undefined) {
+      ldoTask.endDate = task.endDate
+    }
+    if (task.status !== undefined) {
+      ldoTask.status = task.status
+    }
+
+    // Set subtasks through LDO's property interface
+    if (task.subTask && task.subTask.length > 0) {
+      ldoTask.subTask = task.subTask
+    }
+
+    const result = await transaction.commitToRemote()
 
     if (result.isError) {
-      throw new Error(`Failed to upsert task: ${result.type}`);
+      throw new Error(`Failed to upsert task: ${result.type}`)
     }
   }
 
@@ -132,8 +224,8 @@ export class SolidTaskService {
    * @param taskClass The TaskClass to add or update
    */
   async upsertTaskClass(taskClass: TaskClass): Promise<void> {
-    const ldoTask = taskClass.toLdoTask(this.taskResourceUrl);
-    await this.upsertTask(ldoTask);
+    const ldoTask = taskClass.toLdoTask(this.taskResourceUrl)
+    await this.upsertTask(ldoTask)
   }
 
   /**
@@ -144,35 +236,39 @@ export class SolidTaskService {
    */
   async deleteTask(taskId: string): Promise<void> {
     // Read all tasks
-    const tasks = await this.fetchTasks();
-    
+    const tasks = await this.fetchTasks()
+
     // Filter out the task to delete (recursively remove from subtasks too)
     const filterTask = (task: Task): Task | null => {
       if (task['@id'] === taskId) {
-        return null;
+        return null
       }
       if (task.subTask) {
-        task.subTask = task.subTask.map(filterTask).filter(t => t !== null) as Task[];
+        task.subTask = task.subTask
+          .map(filterTask)
+          .filter(t => t !== null) as Task[]
       }
-      return task;
-    };
+      return task
+    }
 
-    const filteredTasks = tasks.map(filterTask).filter(t => t !== null) as Task[];
-    
+    const filteredTasks = tasks
+      .map(filterTask)
+      .filter(t => t !== null) as Task[]
+
     // Save the filtered list
-    await this.saveTasks(filteredTasks);
+    await this.saveTasks(filteredTasks)
   }
 
   /**
    * Create the tasks resource if it doesn't exist
    */
   async ensureResourceExists(): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl);
-    const readResult = await resource.read();
+    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
+    const readResult = await resource.read()
 
     if (readResult.type === 'absentReadSuccess') {
       // Initialize with empty task list
-      await this.saveTasks([]);
+      await this.saveTasks([])
     }
   }
 }
@@ -186,5 +282,5 @@ export function createSolidTaskService(
   podRootUri: string,
   authFetch: typeof fetch,
 ): SolidTaskService {
-  return new SolidTaskService(podRootUri, authFetch);
+  return new SolidTaskService(podRootUri, authFetch)
 }

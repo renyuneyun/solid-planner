@@ -27,6 +27,7 @@ export enum Status {
 
 export class TaskClass implements TaskClassContent {
   readonly id: string
+  fullId?: string // Full @id for RDF (e.g., https://...#uuid)
   name: string
   description?: string
   addedDate: Date
@@ -88,12 +89,23 @@ export class TaskClass implements TaskClassContent {
     })
 
     task.ldoObj = ldoTask
+    task.fullId = rawId // Store the full @id so toLdoTask() can use it
     return task
   }
 
   fillRefsFromMap(taskObjMap: Map<string, TaskClass>): void {
-    for (const ldoSub of this.ldoObj!.subTask ?? []) {
-      const subTask = taskObjMap.get(ldoSub['@id']!)
+    if (!this.ldoObj || !this.ldoObj.subTask) {
+      return
+    }
+
+    // Normalize subTask into an array; LDO can deliver an object map when @container is absent
+    const subRefs = Array.isArray(this.ldoObj.subTask)
+      ? this.ldoObj.subTask
+      : (Object.values(this.ldoObj.subTask ?? {}).filter(Boolean) as Task[])
+
+    for (const ldoSub of subRefs) {
+      const subTaskId = ldoSub['@id']
+      const subTask = taskObjMap.get(subTaskId!)
       if (subTask) {
         this.addSubTask(subTask)
       }
@@ -108,13 +120,33 @@ export class TaskClass implements TaskClassContent {
    * @returns An LDO Task object ready to be written to the Pod
    */
   toLdoTask(baseUri?: string): Task {
-    const localId = this.id.includes('#') ? this.id.split('#').pop()! : this.id
-    const taskId = baseUri ? `${baseUri}#${localId}` : this.id
+    // Use fullId if available (preserves original @id), otherwise construct from baseUri or use local id
+    let taskId: string
+    if (this.fullId) {
+      taskId = this.fullId
+    } else if (baseUri) {
+      const localId = this.id.includes('#')
+        ? this.id.split('#').pop()!
+        : this.id
+      taskId = `${baseUri}#${localId}`
+    } else {
+      taskId = this.id
+    }
 
     // Convert subtasks to references only (just @id) to avoid blank nodes
-    const subTaskReferences = this.subTasks.map((sub) => {
-      const subLocalId = sub.id.includes('#') ? sub.id.split('#').pop()! : sub.id
-      const subTaskId = baseUri ? `${baseUri}#${subLocalId}` : sub.id
+    const subTaskReferences = this.subTasks.map(sub => {
+      // Use fullId if available, otherwise construct from baseUri or use local id
+      let subTaskId: string
+      if (sub.fullId) {
+        subTaskId = sub.fullId
+      } else if (baseUri) {
+        const subLocalId = sub.id.includes('#')
+          ? sub.id.split('#').pop()!
+          : sub.id
+        subTaskId = `${baseUri}#${subLocalId}`
+      } else {
+        subTaskId = sub.id
+      }
       return { '@id': subTaskId } as Task
     })
 
@@ -168,7 +200,6 @@ export class TaskClass implements TaskClassContent {
     }
     this.subTasks.push(task)
     task.parent = this
-    console.log(`Added subtask ${task.name} to task ${this.name}`)
   }
 
   /**
@@ -205,7 +236,7 @@ export function createTaskClassMapFromLdoTasks(
     const task = TaskClass.basicFromLdoTask(ldoTask)
     taskObjMap.set(id, task)
   })
-  taskObjMap.forEach((task) => {
+  taskObjMap.forEach(task => {
     task.fillRefsFromMap(taskObjMap)
   })
   return taskObjMap

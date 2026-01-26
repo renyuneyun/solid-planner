@@ -15,6 +15,7 @@ function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
 export const useTaskStore = defineStore('tasks', {
   state: () => ({
     ldoTasks: new Map<string, Task>(),
+    cachedTaskClassMap: new Map<string, TaskClass>(),
     loading: false,
     error: null as string | null,
   }),
@@ -39,22 +40,19 @@ export const useTaskStore = defineStore('tasks', {
       )
     },
     tasks(state): TaskClass[] {
-      const taskObjMap = createTaskClassMapFromLdoTasks(state.ldoTasks)
-      return [...taskObjMap.values()]
+      // If the number of tasks changed, rebuild the cache
+      if (state.cachedTaskClassMap.size !== state.ldoTasks.size) {
+        state.cachedTaskClassMap.clear()
+        const taskObjMap = createTaskClassMapFromLdoTasks(state.ldoTasks)
+
+        taskObjMap.forEach((task, key) => {
+          state.cachedTaskClassMap.set(key, task)
+        })
+      }
+      return [...state.cachedTaskClassMap.values()]
     },
     rootTasks(state): TaskClass[] {
-      const ret = Array.from(this.tasks.values()).filter(
-        task => task.parent === undefined,
-      )
-      console.log(
-        `Got 0th layer tasks: ${JSON.stringify(
-          ret.map(task => {
-            return [task.name, task.status]
-          }),
-          null,
-          2,
-        )}`,
-      )
+      const ret = this.tasks.filter(task => task.parent === undefined)
       return ret
     },
   },
@@ -64,8 +62,21 @@ export const useTaskStore = defineStore('tasks', {
      */
     loadTasks(tasks: Task[]) {
       this.ldoTasks.clear()
+      this.cachedTaskClassMap.clear()
       tasks.forEach(task => {
-        this.ldoTasks.set(task['@id']!, task)
+        const taskId = task['@id']
+        if (!taskId) {
+          console.warn('Task missing @id, skipping:', task)
+          return
+        }
+        try {
+          // Create a plain object copy to avoid proxy/reactivity issues
+          const plainTask = JSON.parse(JSON.stringify(task)) as Task
+          this.ldoTasks.set(taskId, plainTask)
+        } catch (err) {
+          console.error('Error loading task:', taskId, err)
+          console.error('Problematic task:', task)
+        }
       })
     },
     /**
@@ -73,6 +84,7 @@ export const useTaskStore = defineStore('tasks', {
      * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async addTask(task: Task) {
+      this.cachedTaskClassMap.clear()
       this.ldoTasks.set(task['@id']!, task)
     },
     /**
@@ -80,6 +92,7 @@ export const useTaskStore = defineStore('tasks', {
      * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async removeTask(task: Task) {
+      this.cachedTaskClassMap.clear()
       this.ldoTasks.delete(task['@id']!)
     },
     /**
@@ -87,6 +100,7 @@ export const useTaskStore = defineStore('tasks', {
      * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async updateTask(task: Task) {
+      this.cachedTaskClassMap.clear()
       this.ldoTasks.set(task['@id']!, task)
     },
     /**
@@ -94,6 +108,7 @@ export const useTaskStore = defineStore('tasks', {
      */
     clearTasks() {
       this.ldoTasks.clear()
+      this.cachedTaskClassMap.clear()
     },
     /**
      * Convert all TaskClass objects to LDO Task format
@@ -101,6 +116,20 @@ export const useTaskStore = defineStore('tasks', {
      */
     getTasksAsLdoArray(): Task[] {
       return Array.from(this.ldoTasks.values())
+    },
+    /**
+     * Rebuild all parent-child relationships from ldoTasks
+     * Call this after making modifications to ensure consistency
+     */
+    rebuildRelationships() {
+      const taskObjMap = createTaskClassMapFromLdoTasks(this.ldoTasks)
+      taskObjMap.forEach(task => {
+        task.fillRefsFromMap(taskObjMap)
+      })
+      // Clear cache to force re-creation from updated ldoTasks
+      this.cachedTaskClassMap.clear()
+      // Force reactivity by reassigning
+      this.ldoTasks = new Map(this.ldoTasks)
     },
   },
 })
