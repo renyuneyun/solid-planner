@@ -1,4 +1,4 @@
-import { ShapeType } from "ldo";
+import { ShapeType } from "@ldo/ldo";
 import { taskSchema } from "./task.schema";
 import { taskContext } from "./task.context";
 import { Task } from "./task.typings";

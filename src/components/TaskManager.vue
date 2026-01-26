@@ -83,15 +83,17 @@ import draggable from 'vuedraggable'
 import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
 import { useTaskStore } from '@/stores/tasks'
-import { useSessionStore } from 'solid-helper-vue'
-import { findStorage } from '@renyuneyun/solid-helper'
-import { fetchTasks } from '@/utils/queries'
+import { useSolidTasks } from '@/composables/useSolidTasks'
 
 // Use confirm dialog
 const confirm = useConfirm()
 
-// Task list data, will be provided by external source later
-const tasks = ref<TaskClass[]>([])
+// Use Solid tasks composable for Pod integration
+const taskStore = useTaskStore()
+const { isLoading, error: solidError, saveToPod } = useSolidTasks()
+
+// Task list data from store
+const tasks = computed(() => taskStore.rootTasks)
 
 // List of expanded task IDs
 const expandedTaskIds = ref<Set<string>>(new Set())
@@ -156,7 +158,7 @@ const newTask = reactive<Partial<TaskClass>>({
 const newTaskName = ref('')
 
 // Add a simple task
-function addQuickTask() {
+async function addQuickTask() {
   if (!newTaskName.value.trim()) return
 
   const task = new TaskClass({
@@ -166,8 +168,16 @@ function addQuickTask() {
     subTasks: [],
   })
 
-  tasks.value.push(task)
+  const ldoTask = task.toLdoTask()
+  await taskStore.addTask(ldoTask)
   newTaskName.value = ''
+  
+  // Save to Pod
+  try {
+    await saveToPod()
+  } catch (err) {
+    console.error('Failed to save task to Pod:', err)
+  }
 }
 
 // Open new task drawer
@@ -195,7 +205,7 @@ function closeDrawer() {
 }
 
 // Create detailed new task
-function createNewTask() {
+async function createNewTask() {
   if (!newTask.name?.trim()) return
 
   const task = new TaskClass({
@@ -209,8 +219,16 @@ function createNewTask() {
     subTasks: [],
   })
 
-  tasks.value.push(task)
+  const ldoTask = task.toLdoTask()
+  await taskStore.addTask(ldoTask)
   closeDrawer()
+  
+  // Save to Pod
+  try {
+    await saveToPod()
+  } catch (err) {
+    console.error('Failed to save task to Pod:', err)
+  }
 }
 
 // Select task to show details
@@ -247,7 +265,7 @@ function findTaskById(taskId: string): TaskClass | null {
 }
 
 // Add subtask
-function addSubtask(taskId: string) {
+async function addSubtask(taskId: string) {
   if (!selectedTask.value) return
 
   // Find the task to add as subtask
@@ -281,26 +299,41 @@ function addSubtask(taskId: string) {
 
   // Update parent-child relationships
   updateTaskRelationships()
+
+  // Save updated tasks to Pod
+  const taskStore = useTaskStore()
+  taskStore.updateTask(selectedTask.value.toLdoTask())
+  taskStore.updateTask(taskToAdd.toLdoTask())
+  
+  try {
+    await saveToPod()
+  } catch (error) {
+    console.error('Failed to save subtask relationship to Pod:', error)
+  }
 }
 
 // Remove subtask from parent task
-function removeSubtask(subtaskId: string) {
-  if (!selectedTask.value || !selectedTask.value.subTasks) return
+const removeSubtask = async (parentId: string, subtaskId: string) => {
+  const parent = taskMap.value.get(parentId)
+  const subtask = taskMap.value.get(subtaskId)
 
-  const index = selectedTask.value.subTasks.findIndex(
-    task => task.id === subtaskId,
-  )
-  if (index !== -1) {
-    // Move subtask to top level
-    const subtask = selectedTask.value.subTasks[index]
-    subtask.parent = undefined
-    tasks.value.push(subtask)
-
-    // Remove from parent task
-    selectedTask.value.subTasks.splice(index, 1)
-
-    // Update parent-child relationships
+  if (parent && subtask) {
+    parent.removeSubTask(subtaskId)
+    subtask.parentTaskId = undefined
     updateTaskRelationships()
+
+    // Save updated parent and subtask to Pod
+    const ldoParent = parent.toLdoTask()
+    const ldoSubtask = subtask.toLdoTask()
+    const taskStore = useTaskStore()
+    taskStore.updateTask(ldoParent)
+    taskStore.updateTask(ldoSubtask)
+    
+    try {
+      await saveToPod()
+    } catch (error) {
+      console.error('Failed to save subtask removal to Pod:', error)
+    }
   }
 }
 
@@ -341,30 +374,51 @@ function confirmDelete() {
     icon: 'pi pi-exclamation-triangle',
     acceptLabel: 'Delete',
     rejectLabel: 'Cancel',
-    accept: () => {
-      deleteTask(selectedTask.value!.id)
+    accept: async () => {
+      const taskToDelete = selectedTask.value!
+      deleteTask(taskToDelete.id)
+      
+      // Save to Pod after deletion
+      try {
+        await saveToPod()
+      } catch (err) {
+        console.error('Failed to save after delete:', err)
+      }
     },
   })
 }
 
 // Save task changes
-function saveTask() {
+async function saveTask() {
   if (!selectedTask.value) return
 
-  // In actual project, this would call API to save task
-  // Since we use references, changes automatically reflect in task list
+  // Update the LDO task in store
+  const ldoTask = selectedTask.value.toLdoTask()
+  await taskStore.updateTask(ldoTask)
 
-  // Notify update completion
-  // Actual project might need to show success notification
-
-  // Optional: close drawer
-  closeDrawer()
+  // Save to Pod
+  try {
+    await saveToPod()
+    // Optional: close drawer after successful save
+    closeDrawer()
+  } catch (err) {
+    console.error('Failed to save task to Pod:', err)
+    // Keep drawer open on error so user can retry
+  }
 }
 
 // Handle drag end event
-function onDragEnd(event: any) {
+async function onDragEnd(event: any) {
   // Update parent-child relationships after drag end
   updateTaskRelationships()
+
+  // Save all affected tasks to Pod after drag operation
+  const taskStore = useTaskStore()
+  try {
+    await saveToPod()
+  } catch (error) {
+    console.error('Failed to save drag operation to Pod:', error)
+  }
 }
 
 // Update all task parent-child relationships
@@ -382,35 +436,8 @@ function updateTaskRelationships() {
   updateRelationships(tasks.value)
 }
 
-// Extracted logic for loading tasks based on session
-const sessionStore = useSessionStore()
-const taskStore = useTaskStore()
-
-async function loadTasksForSession() {
-  if (!sessionStore.webid) {
-    return
-  }
-  const storageUrl = await findStorage(sessionStore.webid)
-  if (!storageUrl) {
-    console.error('No storage found for current WebID')
-    return
-  }
-  console.log('Loading tasks from storage:', storageUrl)
-  const remoteTasks = await fetchTasks(storageUrl, sessionStore.session.fetch);
-  taskStore.loadTasks(remoteTasks)
-  tasks.value = taskStore.rootTasks
-  updateTaskRelationships()
-}
-
-watch(
-  () => sessionStore.webid,
-  async (newWebid, oldWebid) => {
-    if (newWebid !== oldWebid) {
-      await loadTasksForSession()
-    }
-  },
-  { immediate: true },
-)
+// Tasks are automatically loaded by useSolidTasks composable
+// when user logs in. The composable watches for authentication changes.
 </script>
 
 <style scoped>

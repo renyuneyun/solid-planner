@@ -8,8 +8,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    AuthProvider: typeof import('./src/components/AuthProvider.vue')['default']
-    Avatar: typeof import('primevue/avatar')['default']
     BrandLogo: typeof import('./src/components/TopBar/BrandLogo.vue')['default']
     Button: typeof import('primevue/button')['default']
     Calendar: typeof import('primevue/calendar')['default']
@@ -24,7 +22,6 @@ declare module 'vue' {
     IconTooling: typeof import('./src/components/icons/IconTooling.vue')['default']
     InputText: typeof import('primevue/inputtext')['default']
     LoginDialog: typeof import('./src/components/TopBar/LoginDialog.vue')['default']
-    LoginProvider: typeof import('./src/components/LoginProvider.vue')['default']
     Navigation: typeof import('./src/components/TopBar/Navigation.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
@@ -32,7 +29,6 @@ declare module 'vue' {
     TaskItem: typeof import('./src/components/TaskItem.vue')['default']
     TaskManager: typeof import('./src/components/TaskManager.vue')['default']
     Textarea: typeof import('primevue/textarea')['default']
-    Toast: typeof import('primevue/toast')['default']
     TopBar: typeof import('./src/components/TopBar.vue')['default']
     UserSection: typeof import('./src/components/TopBar/UserSection.vue')['default']
   }

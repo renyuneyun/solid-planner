@@ -74,8 +74,11 @@ export class TaskClass implements TaskClassContent {
    * @returns A TaskClass object.
    */
   static basicFromLdoTask(ldoTask: Task): TaskClass {
+    const rawId = ldoTask['@id'] ?? ''
+    const shortId = rawId.includes('#') ? rawId.split('#').pop()! : rawId
+
     const task = new TaskClass({
-      id: ldoTask['@id'] ?? '',
+      id: shortId,
       name: ldoTask.title,
       description: ldoTask.description,
       addedDate: new Date(ldoTask.dateCreated ?? ''),
@@ -95,6 +98,39 @@ export class TaskClass implements TaskClassContent {
         this.addSubTask(subTask)
       }
     }
+  }
+
+  /**
+   * Convert this TaskClass object to an LDO Task object.
+   * This allows writing the task back to the Solid Pod.
+   *
+   * @param baseUri The base URI for generating task IDs (e.g., the resource URI)
+   * @returns An LDO Task object ready to be written to the Pod
+   */
+  toLdoTask(baseUri?: string): Task {
+    const localId = this.id.includes('#') ? this.id.split('#').pop()! : this.id
+    const taskId = baseUri ? `${baseUri}#${localId}` : this.id
+
+    // Convert subtasks to references only (just @id) to avoid blank nodes
+    const subTaskReferences = this.subTasks.map((sub) => {
+      const subLocalId = sub.id.includes('#') ? sub.id.split('#').pop()! : sub.id
+      const subTaskId = baseUri ? `${baseUri}#${subLocalId}` : sub.id
+      return { '@id': subTaskId } as Task
+    })
+
+    const ldoTask: Task = {
+      '@id': taskId,
+      type: { '@id': 'Action' },
+      title: this.name,
+      description: this.description,
+      dateCreated: this.addedDate.toISOString().split('T')[0],
+      startDate: this.startDate?.toISOString().split('T')[0],
+      endDate: this.endDate?.toISOString().split('T')[0],
+      status: this.status ? { '@id': this.status } : undefined,
+      subTask: subTaskReferences.length > 0 ? subTaskReferences : undefined,
+    }
+
+    return ldoTask
   }
 
   get effectiveStartDate() {
@@ -169,7 +205,7 @@ export function createTaskClassMapFromLdoTasks(
     const task = TaskClass.basicFromLdoTask(ldoTask)
     taskObjMap.set(id, task)
   })
-  taskObjMap.forEach((task, id) => {
+  taskObjMap.forEach((task) => {
     task.fillRefsFromMap(taskObjMap)
   })
   return taskObjMap

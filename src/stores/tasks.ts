@@ -59,31 +59,48 @@ export const useTaskStore = defineStore('tasks', {
     },
   },
   actions: {
+    /**
+     * Load tasks from an array (replaces current tasks)
+     */
     loadTasks(tasks: Task[]) {
+      this.ldoTasks.clear()
       tasks.forEach(task => {
         this.ldoTasks.set(task['@id']!, task)
       })
     },
     /**
-     * TODO: Implement
-     * @param task
+     * Add a new task to local state
+     * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async addTask(task: Task) {
       this.ldoTasks.set(task['@id']!, task)
     },
     /**
-     * TODO: Implement
-     * @param task
+     * Remove a task from local state
+     * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async removeTask(task: Task) {
       this.ldoTasks.delete(task['@id']!)
     },
     /**
-     * TODO: Implement
-     * @param task
+     * Update a task in local state
+     * Note: Call saveToPod() separately to persist to Solid Pod
      */
     async updateTask(task: Task) {
       this.ldoTasks.set(task['@id']!, task)
+    },
+    /**
+     * Clear all tasks from local state
+     */
+    clearTasks() {
+      this.ldoTasks.clear()
+    },
+    /**
+     * Convert all TaskClass objects to LDO Task format
+     * This is useful before saving to Pod
+     */
+    getTasksAsLdoArray(): Task[] {
+      return Array.from(this.ldoTasks.values())
     },
   },
 })

@@ -16,6 +16,9 @@
   "dependencies": {
     "@inrupt/solid-client": "^1.23.1",
     "@inrupt/vocab-common-rdf": "^1.0.5",
+    "@ldo/connected-solid": "^1.0.0-alpha.32",
+    "@ldo/ldo": "^1.0.0-alpha.32",
+    "@ldo/solid": "^1.0.0-alpha.1",
     "@primevue/themes": "^4.2.5",
     "@rdfjs/data-model": "^2.1.0",
     "@rdfjs/namespace": "^2.0.1",
@@ -24,7 +27,6 @@
     "@shexjs/term": "^1.0.0-alpha.27",
     "@tailwindcss/vite": "^4.1.5",
     "date-fns": "^4.1.0",
-    "ldo": "^1.0.3",
     "pinia": "^2.2.4",
     "primeicons": "^7.0.0",
     "primevue": "^4.2.5",
