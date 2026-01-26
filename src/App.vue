@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import { SessionProvider } from 'solid-helper-vue'
+import { onBeforeMount } from 'vue'
+import { SessionProvider, useSessionStore } from 'solid-helper-vue'
 import { DynamicDialog } from 'primevue'
 import TopBar from '@/components/TopBar.vue'
 import Toast from 'primevue/toast'
+
+// Restore session with restorePreviousSession enabled
+// SessionProvider doesn't pass this parameter by default, so we do it explicitly
+onBeforeMount(async () => {
+  const sessionStore = useSessionStore()
+  // restorePreviousSession: true enables session persistence across page refreshes
+  await sessionStore.handleRedirectAfterLogin(window.location.href, true)
+})
 </script>
 
 <template>

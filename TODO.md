@@ -15,7 +15,7 @@
 
 ## Low priority -- do these only after finishing the above
 
-- [ ] Fix keeping log-in status
+- [x] Fix keeping log-in status
 - [ ] Optimize performance of update
 - [ ] Optimize performance of fetching (caching)
 - [ ] Optimize performance of loading into store
