@@ -32,7 +32,7 @@
             ghost-class="ghost-task"
             class="task-draggable"
           >
-            <template #item="{ element, index }">
+            <template #item="{ element }">
               <task-item
                 :task="element"
                 :level="0"
@@ -99,7 +99,11 @@
 
       <!-- New task mode -->
       <div v-else-if="drawerMode === 'new'">
-        <TaskForm v-model="newTask" class="drawer-form">
+        <TaskForm
+          :modelValue="newTask"
+          @update:modelValue="value => Object.assign(newTask, value)"
+          class="drawer-form"
+        >
           <template #actions>
             <div class="actions">
               <Button
@@ -125,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { v4 as uuidv4 } from 'uuid'
 import { TaskClass, Status } from '@/types/task'
@@ -140,13 +144,8 @@ const confirm = useConfirm()
 
 // Use Solid tasks composable for Pod integration
 const taskStore = useTaskStore()
-const {
-  isLoading,
-  error: solidError,
-  saveToPod,
-  rebuildTaskRelationships,
-  getTaskResourceUrl,
-} = useSolidTasks()
+const { saveToPod, addTaskAndSave, updateTaskAndSave, removeTaskAndSave } =
+  useSolidTasks()
 const tasks = computed(() => taskStore.rootTasks)
 
 // List of expanded task IDs
@@ -222,13 +221,11 @@ async function addQuickTask() {
     subTasks: [],
   })
 
-  const ldoTask = task.toLdoTask()
-  await taskStore.addTask(ldoTask)
   newTaskName.value = ''
 
-  // Save to Pod
+  // Save to Pod (incremental)
   try {
-    await saveToPod()
+    await addTaskAndSave(task)
   } catch (err) {
     console.error('Failed to save task to Pod:', err)
   }
@@ -273,13 +270,11 @@ async function createNewTask() {
     subTasks: [],
   })
 
-  const ldoTask = task.toLdoTask()
-  await taskStore.addTask(ldoTask)
   closeDrawer()
 
-  // Save to Pod
+  // Save to Pod (incremental)
   try {
-    await saveToPod()
+    await addTaskAndSave(task)
   } catch (err) {
     console.error('Failed to save task to Pod:', err)
   }
@@ -351,24 +346,10 @@ async function addSubtask(subtaskId: string) {
   // Add to subtask list
   selectedTask.value.subTasks.push(taskToAdd)
 
-  // Update parent-child relationships in memory
-  updateTaskRelationships()
-
-  // Update the store with the modified tasks
-  // This must happen BEFORE rebuildTaskRelationships() so we don't lose the changes
-  const taskStore = useTaskStore()
-  const baseUri = getTaskResourceUrl()
-  const parentLdo = selectedTask.value.toLdoTask(baseUri)
-  const childLdo = taskToAdd.toLdoTask(baseUri)
-
-  taskStore.updateTask(parentLdo)
-  taskStore.updateTask(childLdo)
-
-  // Now rebuild relationships in the store to sync everything
-  rebuildTaskRelationships()
-
+  // Save both parent and child (incremental)
   try {
-    await saveToPod()
+    await updateTaskAndSave(selectedTask.value)
+    await updateTaskAndSave(taskToAdd)
   } catch (error) {
     console.error('Failed to save subtask relationship to Pod:', error)
   }
@@ -383,45 +364,43 @@ const removeSubtask = async (subtaskId: string) => {
 
   // Remove the subtask from the currently selected task (parent)
   selectedTask.value.removeSubTask(subtask)
-  updateTaskRelationships()
 
-  // Save updated parent and subtask to Pod
-  const ldoParent = selectedTask.value.toLdoTask()
-  const ldoSubtask = subtask.toLdoTask()
-  taskStore.updateTask(ldoParent)
-  taskStore.updateTask(ldoSubtask)
-
+  // Save both parent and child (incremental)
   try {
-    await saveToPod()
+    await updateTaskAndSave(selectedTask.value)
+    await updateTaskAndSave(subtask)
   } catch (error) {
     console.error('Failed to save subtask removal to Pod:', error)
   }
 }
 
 // Find and delete task
-function deleteTask(taskId: string) {
-  const deleteTaskRecursive = (taskList: TaskClass[]) => {
-    const taskIndex = taskList.findIndex(t => t.id === taskId)
-    if (taskIndex >= 0) {
-      taskList.splice(taskIndex, 1)
-      return true
-    }
-
+async function deleteTask(taskId: string) {
+  // Find the task by ID
+  const findTask = (taskList: TaskClass[]): TaskClass | null => {
     for (const task of taskList) {
+      if (task.id === taskId) return task
       if (task.subTasks && task.subTasks.length > 0) {
-        if (deleteTaskRecursive(task.subTasks)) {
-          return true
-        }
+        const found = findTask(task.subTasks)
+        if (found) return found
       }
     }
-    return false
+    return null
   }
 
-  deleteTaskRecursive(tasks.value)
+  const taskToDelete = findTask(tasks.value)
+  if (!taskToDelete) return
 
-  // If deleted task is currently selected, clear selection
-  if (selectedTask.value?.id === taskId) {
-    selectedTask.value = null
+  // Delete from Pod and local state
+  try {
+    await removeTaskAndSave(taskToDelete)
+
+    // If deleted task is currently selected, clear selection
+    if (selectedTask.value?.id === taskId) {
+      selectedTask.value = null
+    }
+  } catch (err) {
+    console.error('Failed to delete task:', err)
   }
 }
 
@@ -437,13 +416,13 @@ function confirmDelete() {
     rejectLabel: 'Cancel',
     accept: async () => {
       const taskToDelete = selectedTask.value!
-      deleteTask(taskToDelete.id)
 
-      // Save to Pod after deletion
+      // Delete from Pod and local state
       try {
-        await saveToPod()
+        await removeTaskAndSave(taskToDelete)
+        closeDrawer()
       } catch (err) {
-        console.error('Failed to save after delete:', err)
+        console.error('Failed to delete task:', err)
       }
     },
   })
@@ -453,13 +432,9 @@ function confirmDelete() {
 async function saveTask() {
   if (!selectedTask.value) return
 
-  // Update the LDO task in store
-  const ldoTask = selectedTask.value.toLdoTask()
-  await taskStore.updateTask(ldoTask)
-
-  // Save to Pod
+  // Save to Pod (incremental)
   try {
-    await saveToPod()
+    await updateTaskAndSave(selectedTask.value)
     // Optional: close drawer after successful save
     closeDrawer()
   } catch (err) {
@@ -469,12 +444,11 @@ async function saveTask() {
 }
 
 // Handle drag end event
-async function onDragEnd(event: any) {
+async function onDragEnd() {
   // Update parent-child relationships after drag end
   updateTaskRelationships()
 
   // Save all affected tasks to Pod after drag operation
-  const taskStore = useTaskStore()
   try {
     await saveToPod()
   } catch (error) {

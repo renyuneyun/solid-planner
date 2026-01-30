@@ -37,11 +37,8 @@ This list is not meant to be complete, but as some personal preferences of techn
 - PrimeVue 4 for UI
   - https://primevue.org/
 - Appropriate RDF library
-  - Prefer LDO (Linked Data Objects)
-    - Repo: https://github.com/o-development/ldo
-    - Prefer 1.0.0-alpha: https://ldo.js.org/1.0.0-alpha.X/
-  - But if LDO is not a good choice, use Soukai
-    - Homepage: https://soukai.js.org/
+  - First tried [LDO](https://github.com/o-development/ldo), but didn't work well, so no longer using it
+  - [Soukai](https://soukai.js.org/)
     - Doc: https://soukai.js.org/guide/getting-started/installation.html
 
 ## Technical design
@@ -50,6 +47,7 @@ You are free to choose most of the architectural and technical designs, but need
 
 - Abstraction of underlying data-handling: either you use LDO or Soukai, you must make an abstraction of the underlying library, because that's easier for migration between different technologies. I guess this is also helpful for Solid-based and local-based storage (and potentially more in the future).
 - The UI shall respond fast: when user clicks a button, the UI shall update quickly, even if the Internet is slow. If possible, store that as local values, and wait for Internet sync to complete (or fail, and possibly fallback). I believe there are appropriate libraries for that.
+- Don't over-engineer the solution, and keep the codebase maintainable.
 
 ## Additional notes
 

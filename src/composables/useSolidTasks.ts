@@ -39,9 +39,6 @@ export function useSolidTasks() {
         storageUrl,
         sessionStore.session.fetch,
       )
-
-      // Ensure the resource exists before any read/write
-      await solidService.value.ensureResourceExists()
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Failed to initialize service'
@@ -62,8 +59,8 @@ export function useSolidTasks() {
     error.value = null
 
     try {
-      const tasks = await solidService.value.fetchTasks()
-      taskStore.loadTasks(tasks)
+      const taskClasses = await solidService.value.loadTasksAsTaskClasses()
+      taskStore.loadTaskClasses(taskClasses)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
       console.error('Failed to load tasks:', err)
@@ -74,7 +71,6 @@ export function useSolidTasks() {
 
   /**
    * Save all tasks to the Solid Pod
-   * Converts TaskClass objects to LDO format before saving
    */
   async function saveToPod() {
     if (!solidService.value) {
@@ -86,9 +82,6 @@ export function useSolidTasks() {
     error.value = null
 
     try {
-      // Ensure the resource exists before writing
-      await solidService.value.ensureResourceExists()
-
       // Get all root TaskClass objects
       const taskClasses = taskStore.rootTasks
 
@@ -104,47 +97,64 @@ export function useSolidTasks() {
   }
 
   /**
-   * Add a new TaskClass and save to Pod
+   * Add a new TaskClass and save to Pod (incremental)
    */
   async function addTaskAndSave(taskClass: TaskClass) {
-    const ldoTask = taskClass.toLdoTask()
-    await taskStore.addTask(ldoTask)
-    await saveToPod()
-  }
-
-  /**
-   * Update a TaskClass and save to Pod
-   */
-  async function updateTaskAndSave(taskClass: TaskClass) {
-    const ldoTask = taskClass.toLdoTask()
-    await taskStore.updateTask(ldoTask)
-    await saveToPod()
-  }
-
-  /**
-   * Remove a TaskClass and save to Pod
-   */
-  async function removeTaskAndSave(taskClass: TaskClass) {
-    const ldoTask = taskClass.toLdoTask()
-    await taskStore.removeTask(ldoTask)
-    await saveToPod()
-  }
-
-  /**
-   * Ensure the tasks resource exists on the Pod
-   */
-  async function ensureResourceExists() {
     if (!solidService.value) {
       error.value = 'Not connected to Solid Pod'
       return
     }
 
+    taskStore.addTaskClass(taskClass)
+
     try {
-      await solidService.value.ensureResourceExists()
+      await solidService.value.saveTaskClass(taskClass)
     } catch (err) {
-      error.value =
-        err instanceof Error ? err.message : 'Failed to ensure resource exists'
-      console.error('Failed to ensure resource exists:', err)
+      error.value = err instanceof Error ? err.message : 'Failed to save task'
+      console.error('Failed to save task:', err)
+      throw err
+    }
+  }
+
+  /**
+   * Update a TaskClass and save to Pod (incremental)
+   */
+  async function updateTaskAndSave(taskClass: TaskClass) {
+    if (!solidService.value) {
+      error.value = 'Not connected to Solid Pod'
+      return
+    }
+
+    taskStore.updateTaskClass(taskClass)
+
+    try {
+      await solidService.value.saveTaskClass(taskClass)
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to update task'
+      console.error('Failed to update task:', err)
+      throw err
+    }
+  }
+
+  /**
+   * Remove a TaskClass and delete from Pod (incremental)
+   */
+  async function removeTaskAndSave(taskClass: TaskClass) {
+    if (!solidService.value) {
+      error.value = 'Not connected to Solid Pod'
+      return
+    }
+
+    taskStore.removeTaskClass(taskClass)
+
+    try {
+      if (taskClass.fullId) {
+        await solidService.value.deleteTask(taskClass.fullId)
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to delete task'
+      console.error('Failed to delete task:', err)
+      throw err
     }
   }
 
@@ -164,21 +174,6 @@ export function useSolidTasks() {
     { immediate: true },
   )
 
-  /**
-   * Rebuild task store relationships after UI modifications
-   * This ensures parent-child relationships are properly synced
-   */
-  function rebuildTaskRelationships() {
-    taskStore.rebuildRelationships()
-  }
-
-  /**
-   * Get the task resource URL for converting tasks to LDO format
-   */
-  function getTaskResourceUrl(): string {
-    return solidService.value?.getTaskResourceUrl() ?? ''
-  }
-
   return {
     // State
     isLoading,
@@ -193,8 +188,5 @@ export function useSolidTasks() {
     addTaskAndSave,
     updateTaskAndSave,
     removeTaskAndSave,
-    ensureResourceExists,
-    rebuildTaskRelationships,
-    getTaskResourceUrl,
   }
 }

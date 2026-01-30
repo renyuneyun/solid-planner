@@ -5,6 +5,7 @@
 - [x] Fixed RDF serialization issues (undefined properties causing invalid RDF)
   - [x] Fixed data loading issues (proxy/reactivity conflicts)
   - [x] Subtasks are not right. Behaviour complicated. See subsection below
+- [x] Migrate to Soukai as storage library
 - [ ] Do not directly reference TaskClass in TaskClass, to avoid complexity
   - [ ] Instead, create a `graph` object with parent and child nodes, referenced by IDs
   - [ ] TaskClass may also refer to parent and child using the IDs? Or don't do that completely?

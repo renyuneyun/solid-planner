@@ -1,9 +1,5 @@
 import { defineStore } from 'pinia'
-import { Task } from '@/ldo/task.typings'
-import { Status, TaskClass, createTaskClassMapFromLdoTasks } from '@/types/task'
-import dataFactory from '@rdfjs/data-model'
-
-const { namedNode } = dataFactory
+import { Status, TaskClass } from '@/types/task'
 
 function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
   if (v1 && v2 === undefined) return 1
@@ -14,8 +10,7 @@ function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
 
 export const useTaskStore = defineStore('tasks', {
   state: () => ({
-    ldoTasks: new Map<string, Task>(),
-    cachedTaskClassMap: new Map<string, TaskClass>(),
+    taskClassMap: new Map<string, TaskClass>(),
     loading: false,
     error: null as string | null,
   }),
@@ -40,16 +35,7 @@ export const useTaskStore = defineStore('tasks', {
       )
     },
     tasks(state): TaskClass[] {
-      // If the number of tasks changed, rebuild the cache
-      if (state.cachedTaskClassMap.size !== state.ldoTasks.size) {
-        state.cachedTaskClassMap.clear()
-        const taskObjMap = createTaskClassMapFromLdoTasks(state.ldoTasks)
-
-        taskObjMap.forEach((task, key) => {
-          state.cachedTaskClassMap.set(key, task)
-        })
-      }
-      return [...state.cachedTaskClassMap.values()]
+      return [...state.taskClassMap.values()]
     },
     rootTasks(state): TaskClass[] {
       const ret = this.tasks.filter(task => task.parent === undefined)
@@ -58,78 +44,68 @@ export const useTaskStore = defineStore('tasks', {
   },
   actions: {
     /**
-     * Load tasks from an array (replaces current tasks)
+     * Load TaskClass objects (replaces current tasks)
      */
-    loadTasks(tasks: Task[]) {
-      this.ldoTasks.clear()
-      this.cachedTaskClassMap.clear()
-      tasks.forEach(task => {
-        const taskId = task['@id']
-        if (!taskId) {
-          console.warn('Task missing @id, skipping:', task)
-          return
+    loadTaskClasses(taskClasses: TaskClass[]) {
+      this.taskClassMap.clear()
+
+      // Collect all tasks (root + subtasks) recursively
+      const visited = new Set<string>()
+
+      const collectTasks = (tc: TaskClass) => {
+        if (visited.has(tc.id)) return
+        visited.add(tc.id)
+        this.taskClassMap.set(tc.id, tc)
+
+        for (const subTask of tc.subTasks) {
+          collectTasks(subTask)
         }
-        try {
-          // Create a plain object copy to avoid proxy/reactivity issues
-          const plainTask = JSON.parse(JSON.stringify(task)) as Task
-          this.ldoTasks.set(taskId, plainTask)
-        } catch (err) {
-          console.error('Error loading task:', taskId, err)
-          console.error('Problematic task:', task)
+      }
+
+      for (const task of taskClasses) {
+        collectTasks(task)
+      }
+    },
+
+    /**
+     * Add a new TaskClass to local state
+     * Note: Call saveToPod() separately to persist to Solid Pod
+     */
+    addTaskClass(taskClass: TaskClass) {
+      this.taskClassMap.set(taskClass.id, taskClass)
+    },
+
+    /**
+     * Remove a TaskClass from local state
+     * Note: Call saveToPod() separately to persist to Solid Pod
+     */
+    removeTaskClass(taskClass: TaskClass) {
+      this.taskClassMap.delete(taskClass.id)
+
+      // Also remove all subtasks recursively
+      const removeSubtasks = (tc: TaskClass) => {
+        for (const subTask of tc.subTasks) {
+          this.taskClassMap.delete(subTask.id)
+          removeSubtasks(subTask)
         }
-      })
+      }
+      removeSubtasks(taskClass)
     },
+
     /**
-     * Add a new task to local state
+     * Update a TaskClass in local state (it's already reactive, so just trigger update)
      * Note: Call saveToPod() separately to persist to Solid Pod
      */
-    async addTask(task: Task) {
-      this.cachedTaskClassMap.clear()
-      this.ldoTasks.set(task['@id']!, task)
+    updateTaskClass(taskClass: TaskClass) {
+      // TaskClass is already reactive, just ensure it's in the map
+      this.taskClassMap.set(taskClass.id, taskClass)
     },
-    /**
-     * Remove a task from local state
-     * Note: Call saveToPod() separately to persist to Solid Pod
-     */
-    async removeTask(task: Task) {
-      this.cachedTaskClassMap.clear()
-      this.ldoTasks.delete(task['@id']!)
-    },
-    /**
-     * Update a task in local state
-     * Note: Call saveToPod() separately to persist to Solid Pod
-     */
-    async updateTask(task: Task) {
-      this.cachedTaskClassMap.clear()
-      this.ldoTasks.set(task['@id']!, task)
-    },
+
     /**
      * Clear all tasks from local state
      */
     clearTasks() {
-      this.ldoTasks.clear()
-      this.cachedTaskClassMap.clear()
-    },
-    /**
-     * Convert all TaskClass objects to LDO Task format
-     * This is useful before saving to Pod
-     */
-    getTasksAsLdoArray(): Task[] {
-      return Array.from(this.ldoTasks.values())
-    },
-    /**
-     * Rebuild all parent-child relationships from ldoTasks
-     * Call this after making modifications to ensure consistency
-     */
-    rebuildRelationships() {
-      const taskObjMap = createTaskClassMapFromLdoTasks(this.ldoTasks)
-      taskObjMap.forEach(task => {
-        task.fillRefsFromMap(taskObjMap)
-      })
-      // Clear cache to force re-creation from updated ldoTasks
-      this.cachedTaskClassMap.clear()
-      // Force reactivity by reassigning
-      this.ldoTasks = new Map(this.ldoTasks)
+      this.taskClassMap.clear()
     },
   },
 })

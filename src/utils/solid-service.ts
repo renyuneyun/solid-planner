@@ -1,275 +1,280 @@
-import { createSolidLdoDataset } from '@ldo/connected-solid'
-import { RDF } from '@inrupt/vocab-common-rdf'
-import { TaskShapeType } from '@/ldo/task.shapeTypes'
-import { Task } from '@/ldo/task.typings'
-import { TaskClass } from '@/types/task'
+import { bootSolidModels, SolidEngine } from 'soukai-solid'
+import { setEngine } from 'soukai'
+import Task from '@/models/Task'
+import { TaskClass, Status } from '@/types/task'
 import { withTrailingSlash } from './url'
 
-const TASK_RESOURCE_NAME = 'tasks.ttl'
+const TASK_CONTAINER_NAME = 'planner/tasks/'
 
 /**
- * Service for reading and writing tasks to/from a Solid Pod
+ * Service for reading and writing tasks to/from a Solid Pod using Soukai
  */
 export class SolidTaskService {
-  private ldoDataset = createSolidLdoDataset()
-  private taskResourceUrl: string
+  private taskContainerUrl: string
+  private engine: SolidEngine
 
   constructor(podRootUri: string, authFetch: typeof fetch) {
-    this.taskResourceUrl = `${withTrailingSlash(podRootUri)}planner/${TASK_RESOURCE_NAME}`
-    this.ldoDataset.setContext('solid', { fetch: authFetch })
+    this.taskContainerUrl = `${withTrailingSlash(podRootUri)}${TASK_CONTAINER_NAME}`
+
+    // Initialize Soukai with authenticated fetch
+    this.engine = new SolidEngine(authFetch)
+    setEngine(this.engine)
+
+    // Boot Solid models
+    bootSolidModels()
   }
 
   /**
-   * Get the task resource URL (base URI for task IDs)
+   * Get the task container URL
    */
-  getTaskResourceUrl(): string {
-    return this.taskResourceUrl
+  getTaskContainerUrl(): string {
+    return this.taskContainerUrl
   }
 
   /**
    * Fetch all tasks from the Solid Pod
    */
   async fetchTasks(): Promise<Task[]> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
-    const readResult = await resource.read()
-
-    if (readResult.isError) {
-      // Resource doesn't exist yet or other error - return empty array
-      return []
-    }
-
-    // Check if resource is absent (404)
-    if (readResult.type === 'absentReadSuccess') {
-      console.log('Task resource not found (404) - returning empty array')
-      return []
-    }
-
     try {
-      // Query for all subjects with rdf:type schema:org/Action
-      // The matchSubject() should return an LdSet of matching tasks
-      const tasksSet = this.ldoDataset
-        .usingType(TaskShapeType)
-        .matchSubject(RDF.type, 'https://schema.org/Action')
-
-      // Convert the LdSet to an array
-      const tasksArray: Task[] = []
-      for (const task of tasksSet) {
-        try {
-          // Safely access task properties
-          const taskObj = task as Task
-          tasksArray.push(taskObj)
-        } catch (taskErr) {
-          // Continue with other tasks
-        }
-      }
-
-      return tasksArray
+      // Fetch all tasks from the container
+      const tasks = await Task.from(this.taskContainerUrl).all()
+      return tasks as Task[]
     } catch (err) {
+      console.error('Error fetching tasks:', err)
+      // If container doesn't exist, return empty array
+      return []
+    }
+  }
+
+  /**
+   * Delete a task by URL (recursively deletes subtasks)
+   */
+  async deleteTask(taskUrl: string): Promise<void> {
+    try {
+      const task = await Task.find(taskUrl)
+      if (task) {
+        // First, recursively delete all subtasks
+        if (task.subTaskUrls && task.subTaskUrls.length > 0) {
+          for (const subTaskUrl of task.subTaskUrls) {
+            const absoluteUrl = this.toAbsoluteUrl(subTaskUrl)
+            await this.deleteTask(absoluteUrl)
+          }
+        }
+        // Then delete the task itself
+        await task.delete()
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err)
       throw err
     }
   }
 
   /**
-   * Save all tasks to the Solid Pod (replaces existing data)
-   * @param tasks Array of Task objects to save
+   * Convert Soukai Task models to TaskClass objects
    */
-  async saveTasks(tasks: Task[]): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
+  async loadTasksAsTaskClasses(): Promise<TaskClass[]> {
+    const tasks = await this.fetchTasks()
+    return this.convertToTaskClasses(tasks)
+  }
 
-    // Ensure resource is loaded
-    await resource.readIfUnfetched()
+  /**
+   * Convert Soukai Task models to TaskClass objects
+   */
+  convertToTaskClasses(tasks: Task[]): TaskClass[] {
+    const taskMap = new Map<string, TaskClass>()
+    const taskByUrl = new Map<string, Task>()
 
-    // Start a fresh transaction - writing will overwrite existing data for the same subjects
-    const transaction = this.ldoDataset.startTransaction()
+    // First pass: create TaskClass objects
+    for (const task of tasks) {
+      const taskUrl = task.url!
+      taskByUrl.set(taskUrl, task)
 
-    // Write all tasks fresh
-    tasks.forEach(task => {
-      const ldoTask = transaction
-        .usingType(TaskShapeType)
-        .write(resource.uri)
-        .fromSubject(task['@id']!)
+      const taskClass = new TaskClass({
+        id: this.extractIdFromUrl(taskUrl),
+        name: task.title || '',
+        description: task.description,
+        addedDate: task.dateCreated || new Date(),
+        startDate: task.startDate,
+        endDate: task.endDate,
+        status: task.status as Status | undefined,
+      })
 
-      // Set properties individually for proper RDF handling
-      // Only set defined values to avoid invalid RDF structures
-      ldoTask.type = { '@id': 'Action' }
-      ldoTask.title = task.title
+      taskClass.fullId = taskUrl
+      taskMap.set(taskUrl, taskClass)
+    }
 
-      if (task.description !== undefined) {
-        ldoTask.description = task.description
-      }
-      if (task.priority !== undefined) {
-        ldoTask.priority = task.priority
-      }
-      if (task.dateCreated !== undefined) {
-        ldoTask.dateCreated = task.dateCreated
-      }
-      if (task.startDate !== undefined) {
-        ldoTask.startDate = task.startDate
-      }
-      if (task.endDate !== undefined) {
-        ldoTask.endDate = task.endDate
-      }
-      if (task.status !== undefined) {
-        ldoTask.status = task.status
-      }
+    // Second pass: establish parent-child relationships
+    for (const task of tasks) {
+      const taskUrl = task.url!
+      const taskClass = taskMap.get(taskUrl)!
 
-      if (task.subTask && task.subTask.length > 0) {
-        ldoTask.subTask = []
-        for (const subTaskRef of task.subTask) {
-          ldoTask.subTask.push(subTaskRef)
+      // Handle subtasks
+      if (task.subTaskUrls && task.subTaskUrls.length > 0) {
+        for (const subTaskUrl of task.subTaskUrls) {
+          // Convert relative URLs to absolute for lookup
+          const absoluteUrl = this.toAbsoluteUrl(subTaskUrl)
+          const subTaskClass = taskMap.get(absoluteUrl)
+          if (subTaskClass) {
+            taskClass.addSubTask(subTaskClass)
+          }
         }
       }
-    })
+    }
 
-    // Commit the transaction to the remote Pod
-    const result = await transaction.commitToRemote()
+    // Return only root tasks (tasks without parents)
+    return Array.from(taskMap.values()).filter(task => !task.parent)
+  }
 
-    if (result.isError) {
-      console.error('Failed to commit transaction:', result)
-      console.error('Error type:', result.type)
-      // Try to extract more details from the error
-      if (result.type === 'aggregateError' && (result as any).errors) {
-        console.error('Aggregate errors:', (result as any).errors)
+  /**
+   * Save a single TaskClass to the Pod (incremental save)
+   */
+  async saveTaskClass(taskClass: TaskClass): Promise<void> {
+    let task: Task
+
+    if (taskClass.fullId) {
+      // Existing task - fetch and update
+      const existing = await Task.find(taskClass.fullId)
+      if (existing) {
+        task = existing
+        this.updateTaskFromTaskClass(task, taskClass)
+        await task.save()
+      } else {
+        // URL exists but task not found, create new
+        task = this.convertToSoukaiTask(taskClass)
+        await task.save(this.taskContainerUrl)
+        taskClass.fullId = task.url
       }
-      throw new Error(`Failed to save tasks: ${result.type}`)
+    } else {
+      // New task - create
+      task = this.convertToSoukaiTask(taskClass)
+      await task.save(this.taskContainerUrl)
+      taskClass.fullId = task.url
     }
   }
 
   /**
-   * Save all TaskClass objects to the Solid Pod
-   * Converts TaskClass objects to LDO Task format before saving
-   * Note: Only root tasks are saved; subtasks are referenced via subTask properties
-   * @param taskClasses Array of TaskClass objects to save (should be root tasks only)
+   * Save TaskClass objects to the Pod (bulk save for initial load)
    */
   async saveTaskClasses(taskClasses: TaskClass[]): Promise<void> {
-    // Convert all tasks (root + all subtasks) to LDO format
-    // We need to save ALL tasks (both root and nested) but only as individual task objects
-    const allTasks: Task[] = []
-    const seenIds = new Set<string>()
+    // Collect all tasks (root + subtasks)
+    const allTasks: TaskClass[] = []
+    const visited = new Set<string>()
 
-    const collectAllTasks = (tc: TaskClass) => {
-      if (seenIds.has(tc.id)) return
-      seenIds.add(tc.id)
-
-      const ldoTask = tc.toLdoTask(this.taskResourceUrl)
-      allTasks.push(ldoTask)
+    const collectTasks = (tc: TaskClass) => {
+      if (visited.has(tc.id)) return
+      visited.add(tc.id)
+      allTasks.push(tc)
 
       for (const subTask of tc.subTasks) {
-        collectAllTasks(subTask)
+        collectTasks(subTask)
       }
     }
 
     for (const task of taskClasses) {
-      collectAllTasks(task)
+      collectTasks(task)
     }
 
-    await this.saveTasks(allTasks)
-  }
-
-  /**
-   * Add or update a single task
-   * @param task The task to add or update
-   */
-  async upsertTask(task: Task): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
-
-    // Ensure resource exists
-    await resource.readIfUnfetched()
-
-    const transaction = this.ldoDataset.startTransaction()
-
-    const ldoTask = transaction
-      .usingType(TaskShapeType)
-      .write(resource.uri)
-      .fromSubject(task['@id']!)
-
-    // Set properties individually for proper RDF handling
-    // Only set defined values to avoid invalid RDF structures
-    ldoTask.type = { '@id': 'Action' }
-    ldoTask.title = task.title
-
-    if (task.description !== undefined) {
-      ldoTask.description = task.description
-    }
-    if (task.priority !== undefined) {
-      ldoTask.priority = task.priority
-    }
-    if (task.dateCreated !== undefined) {
-      ldoTask.dateCreated = task.dateCreated
-    }
-    if (task.startDate !== undefined) {
-      ldoTask.startDate = task.startDate
-    }
-    if (task.endDate !== undefined) {
-      ldoTask.endDate = task.endDate
-    }
-    if (task.status !== undefined) {
-      ldoTask.status = task.status
-    }
-
-    // Set subtasks through LDO's property interface
-    if (task.subTask && task.subTask.length > 0) {
-      ldoTask.subTask = task.subTask
-    }
-
-    const result = await transaction.commitToRemote()
-
-    if (result.isError) {
-      throw new Error(`Failed to upsert task: ${result.type}`)
+    // Save tasks sequentially
+    for (const taskClass of allTasks) {
+      await this.saveTaskClass(taskClass)
     }
   }
 
   /**
-   * Add or update a single TaskClass object
-   * @param taskClass The TaskClass to add or update
+   * Update an existing Task model from TaskClass data
    */
-  async upsertTaskClass(taskClass: TaskClass): Promise<void> {
-    const ldoTask = taskClass.toLdoTask(this.taskResourceUrl)
-    await this.upsertTask(ldoTask)
+  private updateTaskFromTaskClass(task: Task, taskClass: TaskClass): void {
+    task.title = taskClass.name
+    task.description = taskClass.description
+    task.dateCreated = taskClass.addedDate
+    task.startDate = taskClass.startDate
+    task.endDate = taskClass.endDate
+    task.status = taskClass.status
+
+    // Set subtask URLs (as relative paths)
+    if (taskClass.subTasks.length > 0) {
+      task.subTaskUrls = taskClass.subTasks
+        .map(sub => sub.fullId)
+        .filter((url): url is string => !!url)
+        .map(url => this.toRelativeUrl(url))
+    } else {
+      task.subTaskUrls = undefined
+    }
+
+    // Set parent task URL if exists (as relative path)
+    if (taskClass.parent?.fullId) {
+      task.parentTaskUrl = this.toRelativeUrl(taskClass.parent.fullId)
+    } else {
+      task.parentTaskUrl = undefined
+    }
   }
 
   /**
-   * Delete a task by ID
-   * Note: This is a simplified implementation. For proper deletion,
-   * you may want to reload all tasks, filter out the deleted one, and save the rest.
-   * @param taskId The ID of the task to delete
+   * Convert TaskClass to Soukai Task model
    */
-  async deleteTask(taskId: string): Promise<void> {
-    // Read all tasks
-    const tasks = await this.fetchTasks()
+  private convertToSoukaiTask(taskClass: TaskClass): Task {
+    const task = new Task()
 
-    // Filter out the task to delete (recursively remove from subtasks too)
-    const filterTask = (task: Task): Task | null => {
-      if (task['@id'] === taskId) {
-        return null
-      }
-      if (task.subTask) {
-        task.subTask = task.subTask
-          .map(filterTask)
-          .filter(t => t !== null) as Task[]
-      }
-      return task
+    // Set URL if available
+    if (taskClass.fullId) {
+      task.url = taskClass.fullId
     }
 
-    const filteredTasks = tasks
-      .map(filterTask)
-      .filter(t => t !== null) as Task[]
+    task.title = taskClass.name
+    task.description = taskClass.description
+    task.dateCreated = taskClass.addedDate
+    task.startDate = taskClass.startDate
+    task.endDate = taskClass.endDate
+    task.status = taskClass.status
 
-    // Save the filtered list
-    await this.saveTasks(filteredTasks)
+    // Set subtask URLs (as relative paths)
+    if (taskClass.subTasks.length > 0) {
+      task.subTaskUrls = taskClass.subTasks
+        .map(sub => sub.fullId)
+        .filter((url): url is string => !!url)
+        .map(url => this.toRelativeUrl(url))
+    }
+
+    // Set parent task URL if exists (as relative path)
+    if (taskClass.parent?.fullId) {
+      task.parentTaskUrl = this.toRelativeUrl(taskClass.parent.fullId)
+    }
+
+    return task
   }
 
   /**
-   * Create the tasks resource if it doesn't exist
+   * Extract ID from task URL
    */
-  async ensureResourceExists(): Promise<void> {
-    const resource = this.ldoDataset.getResource(this.taskResourceUrl)
-    const readResult = await resource.read()
-
-    if (readResult.type === 'absentReadSuccess') {
-      // Initialize with empty task list
-      await this.saveTasks([])
+  private extractIdFromUrl(url: string): string {
+    if (url.includes('#')) {
+      return url.split('#')[0].split('/').pop()! + '#' + url.split('#')[1]
     }
+    return url.split('/').pop()!
+  }
+
+  /**
+   * Convert absolute URL to relative if in same container
+   */
+  private toRelativeUrl(absoluteUrl: string): string {
+    if (absoluteUrl.startsWith(this.taskContainerUrl)) {
+      // Return just the filename
+      return absoluteUrl.substring(this.taskContainerUrl.length)
+    }
+    return absoluteUrl
+  }
+
+  /**
+   * Convert relative URL to absolute using container URL
+   */
+  private toAbsoluteUrl(relativeUrl: string): string {
+    if (
+      relativeUrl.startsWith('http://') ||
+      relativeUrl.startsWith('https://')
+    ) {
+      return relativeUrl
+    }
+    return this.taskContainerUrl + relativeUrl
   }
 }
 
