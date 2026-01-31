@@ -1,76 +1,77 @@
-# Task Storage and Sync Architecture (Concise)
+# Architecture Overview
 
-## Overview
+## Project Structure
 
-Tasks store relationships as IDs (`parentId`, `childIds`). The graph is a derived index for fast lookups. Soukai persists relationships via `subTaskUrls`/`parentTaskUrl`.
+The codebase is organized to separate domain logic from storage implementation, making it easy to support multiple storage backends (Soukai+Solid, local storage, etc.).
 
-## Key pieces
+### Directory Organization
 
-### TaskClass ([src/types/task.ts](src/types/task.ts))
+```
+src/
+├── models/              # Domain models and logic (library-agnostic)
+│   ├── TaskClass.ts     # Core task domain model
+│   ├── TaskGraph.ts     # Task relationship graph structure
+│   └── task-operations.ts # Helper functions for task/graph operations
+│
+├── storage/             # Storage adapters (pluggable backends)
+│   ├── types.ts         # Storage adapter interface
+│   └── soukai/          # Soukai-specific implementation
+│       ├── Task.model.ts      # Soukai RDF model
+│       ├── soukai-storage.ts  # Storage adapter implementation
+│       └── namespaces.ts      # RDF namespaces
+│
+├── solid/               # Solid protocol layer
+│   └── config.ts        # Authentication configuration
+│
+├── stores/              # Pinia state management
+├── composables/         # Vue composables
+├── components/          # Vue components
+├── utils/               # Generic helper functions
+│   ├── datetime.ts      # Date/time utilities
+│   └── url.ts           # URL utilities
+│
+└── views/               # Vue views/pages
+```
 
-- Data + relationship IDs.
-- `getParentId()` / `getChildrenIds()` read local fields.
+## Key Design Principles
 
-### TaskGraph ([src/utils/task-graph.ts](src/utils/task-graph.ts))
+### 1. Separation of Concerns
 
-- Derived from TaskClass data.
-- Fast queries: `getRootIds()`, `isAncestor()`, `getAllDescendantIds()`.
+- **Domain Layer** (`models/`): Contains business logic and data structures that are independent of any storage mechanism
+- **Storage Layer** (`storage/`): Implements adapters that persist domain models to various backends
+- **Protocol Layer** (`solid/`): Handles Solid-specific concerns (authentication, pod discovery)
 
-### Store ([src/stores/tasks.ts](src/stores/tasks.ts))
+### 2. Storage Abstraction
 
-- Source of truth for mutations.
-- `moveTask()`, `addSubTask()`, `removeTaskClass()` keep IDs and graph in sync.
+The `TaskStorageAdapter` interface in `storage/types.ts` defines the contract for any storage backend:
 
-### Adapter ([src/utils/task-graph-adapter.ts](src/utils/task-graph-adapter.ts))
+- Load tasks with relationships
+- Save individual or multiple tasks
+- Delete tasks
 
-- Convenience helpers for components: `getChildTasks()`, `buildTaskHierarchy()`.
+Current implementation uses Soukai (`storage/soukai/`) for RDF serialization and Solid Pod storage.
 
-### Solid service ([src/utils/solid-service.ts](src/utils/solid-service.ts))
+### 3. Future Extensibility
 
-- Load all tasks, set IDs, derive graph.
-- Save all tasks (relationships stored as IDs in `subTaskUrls`/`parentTaskUrl`).
+To add a new storage backend (e.g., local storage):
 
-## Data flow
+1. Create a new directory under `storage/` (e.g., `storage/local/`)
+2. Implement the `TaskStorageAdapter` interface
+3. Update composables to use the appropriate adapter
 
-1. Load from Pod → TaskClass (IDs) → TaskGraph derived → Store
-2. UI edits via store actions → IDs updated → Save all tasks
-   store.moveTask(childId, undefined) // Remove from parent
+### 4. Domain Model Independence
 
-````
+`TaskClass` and `TaskGraph` in `models/` have no dependencies on:
 
-### For rendering hierarchies:
-```typescript
-// Use the adapter to build hierarchical structure
-const tasks = buildTaskHierarchy(rootIds, store)
-// Now tasks[i].subTasks contains children for rendering
-````
+- RDF libraries (Soukai)
+- Solid protocol
+- Storage mechanisms
 
-## Benefits
+They can be used with any storage backend or even in a different project.
 
-1. **No Circular References** - Tasks don't reference each other directly
-2. **Clean Serialization** - Just IDs to serialize, not object graphs
-3. **Better RDF Mapping** - Direct mapping to RDF relationships
-4. **Improved Reactivity** - No proxy/reactivity conflicts
-5. **Easier to Sync** - Graph state is independent of task data
-6. **Scalability** - Efficient lookups and traversals through the graph
-7. **Type Safety** - Clear separation of concerns
-8. **Testability** - TaskGraph can be unit tested independently
+## Data Flow
 
-## Testing the Changes
+1. **Loading**: Storage adapter → Domain models → Pinia store → Vue components
+2. **Saving**: Vue components → Pinia store → Domain models → Storage adapter
 
-The build succeeds with no TypeScript errors. The system should:
-
-- ✅ Load tasks from Solid Pod with relationships intact
-- ✅ Display task hierarchies correctly
-- ✅ Handle adding/removing subtasks
-- ✅ Properly sync changes back to Pod
-- ✅ Support dragging and reordering tasks
-- ✅ Maintain backward compatibility with existing components
-
-## Future Improvements
-
-1. **Caching Strategy** - Cache graph structure alongside tasks
-2. **Pagination** - Load large task sets incrementally
-3. **Conflict Resolution** - Handle merge conflicts when syncing
-4. **Subscriptions** - Real-time updates for collaborative editing
-5. **Advanced Queries** - Filter/sort by complex relationships
+The composables (`composables/useSolidTasks.ts`) orchestrate this flow, bridging Vue's reactivity system with the storage layer.

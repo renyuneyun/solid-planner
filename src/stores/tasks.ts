@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
-import { Status, TaskClass } from '@/types/task'
-import { TaskGraph } from '@/utils/task-graph'
+import { Status, TaskClass } from '@/models/TaskClass'
+import { TaskGraph } from '@/models/TaskGraph'
 
 function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
   if (v1 && v2 === undefined) return 1

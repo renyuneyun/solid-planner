@@ -1,9 +1,9 @@
 import { bootSolidModels, SolidEngine } from 'soukai-solid'
 import { setEngine } from 'soukai'
-import Task from '@/models/Task'
-import { TaskClass, Status } from '@/types/task'
-import { TaskGraph } from '@/utils/task-graph'
-import { withTrailingSlash } from './url'
+import Task from './Task.model'
+import { TaskClass, Status } from '@/models/TaskClass'
+import { TaskGraph } from '@/models/TaskGraph'
+import { withTrailingSlash } from '@/utils/url'
 
 const TASK_CONTAINER_NAME = 'planner/tasks/'
 

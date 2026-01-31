@@ -1,4 +1,4 @@
-import { TaskClass } from '@/types/task'
+import { TaskClass } from '@/models/TaskClass'
 
 export function isToday(dateStr: string) {
   const date = new Date(dateStr)

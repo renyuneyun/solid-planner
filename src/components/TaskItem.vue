@@ -72,9 +72,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { TaskClass, Status } from '@/types/task'
+import { TaskClass, Status } from '@/models/TaskClass'
 import { useTaskStore } from '@/stores/tasks'
-import { getChildTasks } from '@/utils/task-graph-adapter'
+import { getChildTasks } from '@/models/task-operations'
 import draggable from 'vuedraggable'
 import { format } from 'date-fns'
 import Tag from 'primevue/tag'

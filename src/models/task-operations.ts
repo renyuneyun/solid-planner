@@ -3,7 +3,7 @@
  * These functions simplify access to task relationships stored in TaskClass
  */
 
-import { TaskClass } from '@/types/task'
+import { TaskClass } from './TaskClass'
 import { useTaskStore } from '@/stores/tasks'
 
 export interface TaskWithChildren extends TaskClass {
@@ -14,10 +14,13 @@ export interface TaskWithChildren extends TaskClass {
  * Get a task's children as TaskClass objects
  * Reads directly from task.childIds, no graph lookup needed
  */
-export function getChildTasks(taskId: string, store = useTaskStore()): TaskClass[] {
+export function getChildTasks(
+  taskId: string,
+  store = useTaskStore(),
+): TaskClass[] {
   const task = store.taskMap.get(taskId)
   if (!task) return []
-  
+
   return task.childIds
     .map(id => store.taskMap.get(id))
     .filter((task): task is TaskClass => !!task)
@@ -27,7 +30,10 @@ export function getChildTasks(taskId: string, store = useTaskStore()): TaskClass
  * Get a task's parent as a TaskClass object
  * Reads directly from task.parentId
  */
-export function getParentTask(taskId: string, store = useTaskStore()): TaskClass | undefined {
+export function getParentTask(
+  taskId: string,
+  store = useTaskStore(),
+): TaskClass | undefined {
   const task = store.taskMap.get(taskId)
   if (!task || !task.parentId) return undefined
   return store.taskMap.get(task.parentId)
@@ -36,7 +42,10 @@ export function getParentTask(taskId: string, store = useTaskStore()): TaskClass
 /**
  * Recursively get all descendant tasks of a given task
  */
-export function getAllDescendantTasks(taskId: string, store = useTaskStore()): TaskClass[] {
+export function getAllDescendantTasks(
+  taskId: string,
+  store = useTaskStore(),
+): TaskClass[] {
   const descendants: TaskClass[] = []
   const task = store.taskMap.get(taskId)
   if (!task) return descendants
@@ -55,7 +64,10 @@ export function getAllDescendantTasks(taskId: string, store = useTaskStore()): T
 /**
  * Get all ancestor task IDs of a given task (from immediate parent to root)
  */
-export function getAncestorTaskIds(taskId: string, store = useTaskStore()): string[] {
+export function getAncestorTaskIds(
+  taskId: string,
+  store = useTaskStore(),
+): string[] {
   const ancestors: string[] = []
   let task = store.taskMap.get(taskId)
   while (task && task.parentId) {
@@ -68,7 +80,11 @@ export function getAncestorTaskIds(taskId: string, store = useTaskStore()): stri
 /**
  * Check if one task is an ancestor of another
  */
-export function isAncestor(ancestorId: string, taskId: string, store = useTaskStore()): boolean {
+export function isAncestor(
+  ancestorId: string,
+  taskId: string,
+  store = useTaskStore(),
+): boolean {
   return store.graph.isAncestor(ancestorId, taskId)
 }
 
@@ -81,22 +97,28 @@ export function buildTaskHierarchy(
   store = useTaskStore(),
 ): TaskWithChildren[] {
   const results: TaskWithChildren[] = []
-  
+
   for (const id of taskIds) {
     const task = store.taskMap.get(id)
     if (task) {
       results.push(buildTaskHierarchyForTask(task, store))
     }
   }
-  
+
   return results
 }
 
 /**
  * Recursively build task hierarchy for a single task
  */
-function buildTaskHierarchyForTask(task: TaskClass, store = useTaskStore()): TaskWithChildren {
-  const taskWithChildren = Object.assign(Object.create(Object.getPrototypeOf(task)), task) as TaskWithChildren
+function buildTaskHierarchyForTask(
+  task: TaskClass,
+  store = useTaskStore(),
+): TaskWithChildren {
+  const taskWithChildren = Object.assign(
+    Object.create(Object.getPrototypeOf(task)),
+    task,
+  ) as TaskWithChildren
   taskWithChildren.subTasks = getChildTasks(task.id, store).map(child =>
     buildTaskHierarchyForTask(child, store),
   )

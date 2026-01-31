@@ -138,10 +138,10 @@
 </template>
 
 <script setup lang="ts">
-import { Status, TaskClass } from '@/types/task'
+import { Status, TaskClass } from '@/models/TaskClass'
 import { computed, ref, watchEffect } from 'vue'
 import { useTaskStore } from '@/stores/tasks'
-import { getChildTasks } from '@/utils/task-graph-adapter'
+import { getChildTasks } from '@/models/task-operations'
 
 // Define component properties
 const props = defineProps<{

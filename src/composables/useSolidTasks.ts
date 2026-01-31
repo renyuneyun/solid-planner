@@ -1,8 +1,11 @@
 import { ref, watch, computed } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import { useTaskStore } from '@/stores/tasks'
-import { createSolidTaskService, SolidTaskService } from '@/utils/solid-service'
-import { TaskClass } from '@/types/task'
+import {
+  createSolidTaskService,
+  SolidTaskService,
+} from '@/storage/soukai/soukai-storage'
+import { TaskClass } from '@/models/TaskClass'
 import { findStorage } from '@renyuneyun/solid-helper'
 
 /**

@@ -29,12 +29,7 @@
       </div>
 
       <div class="login-actions">
-        <Button
-          label="Cancel"
-          text
-          @click="handleCancel"
-          class="cancel-btn"
-        />
+        <Button label="Cancel" text @click="handleCancel" class="cancel-btn" />
         <Button
           label="Login"
           icon="pi pi-sign-in"
@@ -56,7 +51,7 @@
 import { ref, computed } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import { useToast } from 'primevue/usetoast'
-import { AUTH_CONFIG } from '@/constants/auth'
+import { AUTH_CONFIG } from '@/solid/config'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
@@ -85,16 +80,16 @@ const error = ref<string | null>(null)
 // Computed visibility
 const isVisible = computed({
   get: () => props.visible,
-  set: (value: boolean) => emit('update:visible', value)
+  set: (value: boolean) => emit('update:visible', value),
 })
 
 // Provider options for dropdown
 const providerOptions = [
   ...Object.entries(AUTH_CONFIG.identityProviders).map(([name, url]) => ({
     name,
-    url
+    url,
   })),
-  { name: 'Custom Provider', url: 'custom' }
+  { name: 'Custom Provider', url: 'custom' },
 ]
 
 // Methods
@@ -114,23 +109,28 @@ const handleLogin = async () => {
     isLoading.value = true
     error.value = null
 
-    const oidcIssuer = selectedProvider.value === 'custom'
-      ? customProvider.value
-      : selectedProvider.value
+    const oidcIssuer =
+      selectedProvider.value === 'custom'
+        ? customProvider.value
+        : selectedProvider.value
 
     if (!oidcIssuer) {
       error.value = 'Please provide a valid Identity Provider URL'
       return
     }
 
-    await sessionStore.login(oidcIssuer, AUTH_CONFIG.redirectUrl, AUTH_CONFIG.clientName)
+    await sessionStore.login(
+      oidcIssuer,
+      AUTH_CONFIG.redirectUrl,
+      AUTH_CONFIG.clientName,
+    )
 
     isVisible.value = false
     toast.add({
       severity: 'success',
       summary: 'Login Successful',
       detail: 'You have been logged in successfully',
-      life: 3000
+      life: 3000,
     })
   } catch (e: any) {
     error.value = `Login failed: ${e.message || 'Unknown error'}`
@@ -138,7 +138,7 @@ const handleLogin = async () => {
       severity: 'error',
       summary: 'Login Failed',
       detail: error.value,
-      life: 5000
+      life: 5000,
     })
   } finally {
     isLoading.value = false

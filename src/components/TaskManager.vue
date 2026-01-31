@@ -132,7 +132,7 @@
 import { ref, reactive, computed } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { v4 as uuidv4 } from 'uuid'
-import { TaskClass, Status } from '@/types/task'
+import { TaskClass, Status } from '@/models/TaskClass'
 import draggable from 'vuedraggable'
 import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
@@ -143,7 +143,7 @@ import {
   buildTaskHierarchy,
   getAllDescendantTasks,
   isAncestor,
-} from '@/utils/task-graph-adapter'
+} from '@/models/task-operations'
 
 // Use confirm dialog
 const confirm = useConfirm()

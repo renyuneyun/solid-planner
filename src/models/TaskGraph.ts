@@ -1,10 +1,10 @@
-import type { TaskClass } from '@/types/task'
+import type { TaskClass } from './TaskClass'
 
 /**
  * Task Graph - provides cached indices for efficient task relationship lookups
  * The graph is derived from TaskClass.parentId and TaskClass.childIds properties.
  * It maintains O(1) lookups while the source of truth remains in TaskClass instances.
- * 
+ *
  * This provides:
  * - Efficient parent/child lookups
  * - Root task identification
@@ -23,7 +23,7 @@ export class TaskGraph {
    * Map of task ID to array of child task IDs (cached from TaskClass.childIds)
    */
   private childrenMap = new Map<string, string[]>()
-  
+
   /**
    * Build or rebuild the graph from TaskClass instances
    */
@@ -32,7 +32,7 @@ export class TaskGraph {
     graph.rebuildFromTasks(tasks)
     return graph
   }
-  
+
   /**
    * Rebuild indices from TaskClass data (source of truth)
    */
