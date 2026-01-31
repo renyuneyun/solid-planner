@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setActivePinia, createPinia } from 'pinia'
+import { setupPinia } from '../../helpers/pinia'
 import { useTaskStore } from '@/stores/tasks'
 import { TaskGraph } from '@/models/TaskGraph'
 import { Status } from '@/models/TaskClass'
@@ -11,7 +11,7 @@ import {
 
 describe('useTaskStore', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    setupPinia()
   })
 
   describe('initial state', () => {
@@ -50,7 +50,7 @@ describe('useTaskStore', () => {
       store.loadTaskClasses(newTasks, newGraph)
 
       expect(store.taskMap.size).toBe(3)
-      expect(store.tasks.map((t) => t.id)).toEqual(newTasks.map((t) => t.id))
+      expect(store.tasks.map(t => t.id)).toEqual(newTasks.map(t => t.id))
     })
 
     it('should set graph reference on all tasks', () => {
@@ -251,7 +251,7 @@ describe('useTaskStore', () => {
         store.loadTaskClasses(tasks, graph)
 
         expect(store.tasks).toHaveLength(3)
-        expect(store.tasks.map((t) => t.id)).toEqual(tasks.map((t) => t.id))
+        expect(store.tasks.map(t => t.id)).toEqual(tasks.map(t => t.id))
       })
     })
 
@@ -266,10 +266,10 @@ describe('useTaskStore', () => {
         const roots = store.rootTasks
 
         expect(roots).toHaveLength(2)
-        expect(roots.map((t) => t.id)).toContain('parent-1')
-        expect(roots.map((t) => t.id)).toContain('root-2')
-        expect(roots.map((t) => t.id)).not.toContain('child-1')
-        expect(roots.map((t) => t.id)).not.toContain('child-2')
+        expect(roots.map(t => t.id)).toContain('parent-1')
+        expect(roots.map(t => t.id)).toContain('root-2')
+        expect(roots.map(t => t.id)).not.toContain('child-1')
+        expect(roots.map(t => t.id)).not.toContain('child-2')
       })
     })
 

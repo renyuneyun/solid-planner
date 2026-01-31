@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { setActivePinia, createPinia } from 'pinia'
+import { setupPinia } from '../../helpers/pinia'
 import {
   getChildTasks,
   getParentTask,
@@ -15,7 +15,7 @@ import { TaskGraph } from '@/models/TaskGraph'
 
 describe('task-operations', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
+    setupPinia()
   })
 
   describe('getChildTasks', () => {
