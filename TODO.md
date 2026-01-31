@@ -13,6 +13,9 @@
 ## Mid priority -- can do these things in the meantime
 
 - [ ] Prefixes not exist in the Turtle file.
+- [ ] Provide testing suits
+  - [ ] Unit tests
+  - [ ] Other tests with mock components
 
 ## Low priority -- do these only after finishing the above
 
@@ -23,3 +26,9 @@
 - [ ] Optimize data structure in Pod
 - [ ] Use TypeIndex?
 - [ ] Local data backend
+- [ ] Synchronization between local and remote (Solid), and make it local-first
+  - [ ] Check if CRDT is a good way, possibly enabled by Soukai
+
+## Other
+
+Consult the `Design.md` file for project's grand designs and future plans.
