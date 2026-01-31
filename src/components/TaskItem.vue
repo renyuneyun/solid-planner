@@ -48,7 +48,7 @@
     <!-- Recursively render subtasks -->
     <draggable
       v-if="hasSubtasks && isExpanded"
-      v-model="task.subTasks"
+      v-model="childTasks"
       group="tasks"
       item-key="id"
       handle=".task-drag-handle"
@@ -71,11 +71,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { TaskClass, Status } from '@/types/task'
+import { useTaskStore } from '@/stores/tasks'
+import { getChildTasks } from '@/utils/task-graph-adapter'
 import draggable from 'vuedraggable'
 import { format } from 'date-fns'
 import Tag from 'primevue/tag'
+
+const taskStore = useTaskStore()
 
 const props = defineProps<{
   task: TaskClass
@@ -90,9 +94,17 @@ const emit = defineEmits<{
   (e: 'delete', taskId: string): void
 }>()
 
+const childTasks = ref<TaskClass[]>(getChildTasks(props.task.id, taskStore))
+
+// Update children when task changes
+const updateChildren = () => {
+  childTasks.value = getChildTasks(props.task.id, taskStore)
+}
+
 // Check if has subtasks
 const hasSubtasks = computed(() => {
-  return props.task.subTasks && props.task.subTasks.length > 0
+  updateChildren()
+  return childTasks.value.length > 0
 })
 
 // Check if task is expanded

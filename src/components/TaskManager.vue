@@ -138,6 +138,12 @@ import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
 import { useTaskStore } from '@/stores/tasks'
 import { useSolidTasks } from '@/composables/useSolidTasks'
+import {
+  getChildTasks,
+  buildTaskHierarchy,
+  getAllDescendantTasks,
+  isAncestor,
+} from '@/utils/task-graph-adapter'
 
 // Use confirm dialog
 const confirm = useConfirm()
@@ -146,7 +152,12 @@ const confirm = useConfirm()
 const taskStore = useTaskStore()
 const { saveToPod, addTaskAndSave, updateTaskAndSave, removeTaskAndSave } =
   useSolidTasks()
-const tasks = computed(() => taskStore.rootTasks)
+
+// Compute task hierarchy for rendering
+const tasks = computed(() => {
+  const rootIds = taskStore.graph.getRootIds()
+  return buildTaskHierarchy(rootIds, taskStore)
+})
 
 // List of expanded task IDs
 const expandedTaskIds = ref<Set<string>>(new Set())
@@ -168,35 +179,16 @@ const availableTasksForSubtask = computed(() => {
   if (!selectedTask.value) return []
 
   // Get all descendant task IDs under current task (including current task)
-  const excludeIds = new Set<string>()
+  const excludeIds = new Set<string>([selectedTask.value.id])
 
-  // Recursively collect subtask IDs
-  const collectChildTaskIds = (task: TaskClass) => {
-    excludeIds.add(task.id)
-    if (task.subTasks) {
-      task.subTasks.forEach(subtask => collectChildTaskIds(subtask))
-    }
+  // Add all descendants
+  const descendants = getAllDescendantTasks(selectedTask.value.id, taskStore)
+  for (const desc of descendants) {
+    excludeIds.add(desc.id)
   }
 
-  collectChildTaskIds(selectedTask.value)
-
-  // Filter out tasks that need to be excluded from all tasks
-  const flattenTasks: TaskClass[] = []
-
-  // Recursively collect all top-level tasks and their subtasks
-  const collectAllTasks = (taskList: TaskClass[]) => {
-    taskList.forEach(task => {
-      if (!excludeIds.has(task.id)) {
-        flattenTasks.push(task)
-      }
-      if (task.subTasks) {
-        collectAllTasks(task.subTasks)
-      }
-    })
-  }
-
-  collectAllTasks(tasks.value)
-  return flattenTasks
+  // Get all tasks and filter out excluded ones
+  return taskStore.tasks.filter(task => !excludeIds.has(task.id))
 })
 
 // New task form
@@ -204,7 +196,6 @@ const newTask = reactive<Partial<TaskClass>>({
   name: '',
   description: '',
   status: Status.IN_PROGRESS,
-  subTasks: [],
 })
 
 // Quick add task
@@ -218,7 +209,6 @@ async function addQuickTask() {
     id: uuidv4(),
     name: newTaskName.value,
     addedDate: new Date(),
-    subTasks: [],
   })
 
   newTaskName.value = ''
@@ -240,7 +230,6 @@ function openNewTaskDrawer() {
     status: Status.IN_PROGRESS,
     startDate: undefined,
     endDate: undefined,
-    subTasks: [],
   })
 
   // Switch to new mode and open drawer
@@ -267,7 +256,6 @@ async function createNewTask() {
     startDate: newTask.startDate,
     endDate: newTask.endDate,
     status: newTask.status || Status.IN_PROGRESS,
-    subTasks: [],
   })
 
   closeDrawer()
@@ -297,20 +285,7 @@ function toggleTaskExpanded(taskId: string) {
 
 // Find task by specific ID
 function findTaskById(taskId: string): TaskClass | null {
-  const findInList = (taskList: TaskClass[]): TaskClass | null => {
-    for (const task of taskList) {
-      if (task.id === taskId) {
-        return task
-      }
-      if (task.subTasks && task.subTasks.length > 0) {
-        const found = findInList(task.subTasks)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  return findInList(tasks.value)
+  return taskStore.taskMap.get(taskId) || null
 }
 
 // Add subtask
@@ -318,33 +293,11 @@ async function addSubtask(subtaskId: string) {
   if (!selectedTask.value) return
 
   // Find the task to add as subtask
-  const taskToAdd = findTaskById(subtaskId)
+  const taskToAdd = taskStore.taskMap.get(subtaskId)
   if (!taskToAdd) return
 
-  // Remove from original position
-  const removeFromParent = (taskList: TaskClass[], id: string): boolean => {
-    for (let i = 0; i < taskList.length; i++) {
-      if (taskList[i].id === id) {
-        taskList.splice(i, 1)
-        return true
-      }
-      if (taskList[i].subTasks && taskList[i].subTasks.length > 0) {
-        if (removeFromParent(taskList[i].subTasks, id)) {
-          return true
-        }
-      }
-    }
-    return false
-  }
-
-  // Remove from top-level tasks
-  removeFromParent(tasks.value, subtaskId)
-
-  // Set parent task relationship
-  taskToAdd.parent = selectedTask.value
-
-  // Add to subtask list
-  selectedTask.value.subTasks.push(taskToAdd)
+  // Move task to be a child of selected task (use store action to ensure consistency)
+  taskStore.moveTask(subtaskId, selectedTask.value.id)
 
   // Save both parent and child (incremental)
   try {
@@ -359,11 +312,11 @@ async function addSubtask(subtaskId: string) {
 const removeSubtask = async (subtaskId: string) => {
   if (!selectedTask.value) return
 
-  const subtask = findTaskById(subtaskId)
+  const subtask = taskStore.taskMap.get(subtaskId)
   if (!subtask) return
 
   // Remove the subtask from the currently selected task (parent)
-  selectedTask.value.removeSubTask(subtask)
+  taskStore.moveTask(subtaskId, undefined)
 
   // Save both parent and child (incremental)
   try {
@@ -376,32 +329,26 @@ const removeSubtask = async (subtaskId: string) => {
 
 // Find and delete task
 async function deleteTask(taskId: string) {
-  // Find the task by ID
-  const findTask = (taskList: TaskClass[]): TaskClass | null => {
-    for (const task of taskList) {
-      if (task.id === taskId) return task
-      if (task.subTasks && task.subTasks.length > 0) {
-        const found = findTask(task.subTasks)
-        if (found) return found
+  const task = taskStore.taskMap.get(taskId)
+  if (!task) return
+
+  confirm.require({
+    message: 'Do you want to delete this task and all its subtasks?',
+    header: 'Confirm',
+    icon: 'pi pi-exclamation-triangle',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        await removeTaskAndSave(taskId)
+        // If deleted task is currently selected, clear selection
+        if (selectedTask.value?.id === taskId) {
+          selectedTask.value = null
+        }
+      } catch (error) {
+        console.error('Failed to delete task from Pod:', error)
       }
-    }
-    return null
-  }
-
-  const taskToDelete = findTask(tasks.value)
-  if (!taskToDelete) return
-
-  // Delete from Pod and local state
-  try {
-    await removeTaskAndSave(taskToDelete)
-
-    // If deleted task is currently selected, clear selection
-    if (selectedTask.value?.id === taskId) {
-      selectedTask.value = null
-    }
-  } catch (err) {
-    console.error('Failed to delete task:', err)
-  }
+    },
+  })
 }
 
 // Confirm delete currently selected task
@@ -419,7 +366,7 @@ function confirmDelete() {
 
       // Delete from Pod and local state
       try {
-        await removeTaskAndSave(taskToDelete)
+        await removeTaskAndSave(taskToDelete.id)
         closeDrawer()
       } catch (err) {
         console.error('Failed to delete task:', err)
@@ -458,17 +405,37 @@ async function onDragEnd() {
 
 // Update all task parent-child relationships
 function updateTaskRelationships() {
-  // Recursively update task relationships
-  const updateRelationships = (taskList: TaskClass[], parent?: TaskClass) => {
-    for (const task of taskList) {
-      task.parent = parent
-      if (task.subTasks && task.subTasks.length > 0) {
-        updateRelationships(task.subTasks, task)
+  // This function needs to update the graph based on the current task hierarchy
+  // Since we're using draggable with v-model="tasks", Vue manages the ordering
+  // We need to rebuild parent-child relationships from the rendered tree
+
+  // Get the current hierarchy from the rendered tasks
+  const updateRelationships = (
+    taskList: TaskClass[],
+    parentId: string | undefined,
+  ) => {
+    for (let index = 0; index < taskList.length; index++) {
+      const task = taskList[index]
+      const oldParentId = taskStore.graph.getParentId(task.id)
+
+      // Only update if parent changed
+      if (oldParentId !== parentId) {
+        taskStore.moveTask(task.id, parentId)
+      }
+
+      // Recursively update children
+      const children = getChildTasks(task.id, taskStore)
+      if (children.length > 0) {
+        updateRelationships(children, task.id)
       }
     }
   }
 
-  updateRelationships(tasks.value)
+  const rootIds = taskStore.graph.getRootIds()
+  const rootTasks = rootIds
+    .map(id => taskStore.taskMap.get(id))
+    .filter((t): t is TaskClass => !!t)
+  updateRelationships(rootTasks, undefined)
 }
 
 // Tasks are automatically loaded by useSolidTasks composable

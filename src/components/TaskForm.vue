@@ -62,9 +62,9 @@
         />
       </div>
 
-      <div v-if="taskModel.subTasks && taskModel.subTasks.length > 0">
+      <div v-if="subtasks.length > 0">
         <ul class="subtask-list">
-          <li v-for="subtask in taskModel.subTasks" :key="subtask.id">
+          <li v-for="subtask in subtasks" :key="subtask.id">
             <div class="subtask-info">
               <i :class="getStatusIcon(subtask.status)"></i>
               <span>{{ subtask.name }}</span>
@@ -140,6 +140,8 @@
 <script setup lang="ts">
 import { Status, TaskClass } from '@/types/task'
 import { computed, ref, watchEffect } from 'vue'
+import { useTaskStore } from '@/stores/tasks'
+import { getChildTasks } from '@/utils/task-graph-adapter'
 
 // Define component properties
 const props = defineProps<{
@@ -155,6 +157,8 @@ const emit = defineEmits<{
   (e: 'add-subtask', taskId: string): void
 }>()
 
+const taskStore = useTaskStore()
+
 // Status options
 const statusOptions = [
   { label: 'In Progress', value: Status.IN_PROGRESS },
@@ -168,6 +172,12 @@ const taskModel = computed({
   set: value => emit('update:modelValue', value),
 })
 
+// Get subtasks for the current task
+const subtasks = computed(() => {
+  const task = taskModel.value as TaskClass
+  return task && task.id ? getChildTasks(task.id, taskStore) : []
+})
+
 // Add subtask related state
 const showAddSubtaskDialog = ref(false)
 const subtaskSearchTerm = ref('')
@@ -177,9 +187,7 @@ const availableTasks = computed(() => {
   if (!props.availableTasksForSubtask) return []
 
   const currentTaskId = (taskModel.value as TaskClass).id
-  const existingSubtaskIds = new Set(
-    (taskModel.value.subTasks || []).map(task => task.id),
-  )
+  const existingSubtaskIds = new Set(subtasks.value.map(task => task.id))
 
   // Filter out current task, tasks that are already subtasks, and filter by search term
   return props.availableTasksForSubtask.filter(task => {

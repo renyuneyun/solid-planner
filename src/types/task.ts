@@ -8,8 +8,6 @@ interface TaskClassContent {
   startDate?: Date
   endDate?: Date
   status?: Status
-  subTasks?: TaskClass[]
-  parent?: TaskClass
 }
 
 export enum Priority {
@@ -24,17 +22,31 @@ export enum Status {
   IGNORED = 'Ignored',
 }
 
+/**
+ * TaskClass represents a task's core data properties.
+ * Parent-child relationships are managed by TaskGraph, not stored directly in this class.
+ * This keeps tasks as pure data without circular references.
+ */
 export class TaskClass implements TaskClassContent {
   readonly id: string
-  fullId?: string // Full @id for RDF (e.g., https://...#uuid)
+  fullId?: string // Full @id for RDF/Solid Pod (e.g., https://...#uuid)
   name: string
   description?: string
   addedDate: Date
   startDate?: Date
   endDate?: Date
   status?: Status
-  subTasks: TaskClass[] = []
-  parent?: TaskClass = undefined
+
+  // Relationships stored directly as IDs (source of truth)
+  parentId?: string
+  childIds: string[] = []
+
+  /**
+   * Reference to the TaskGraph that maintains cached indices for performance.
+   * The graph is derived from parentId/childIds and kept in sync.
+   * Private - use the store methods or adapter functions to query relationships.
+   */
+  private graph?: any // Use 'any' for Pinia compatibility
 
   constructor({
     id,
@@ -44,9 +56,9 @@ export class TaskClass implements TaskClassContent {
     startDate,
     endDate,
     status,
-    subTasks,
-    parent,
-  }: TaskClassContent) {
+    parentId,
+    childIds,
+  }: TaskClassContent & { parentId?: string; childIds?: string[] }) {
     this.id = id
     this.name = name
     this.description = description
@@ -54,15 +66,15 @@ export class TaskClass implements TaskClassContent {
     this.startDate = startDate
     this.endDate = endDate
     this.status = status
-    this.subTasks = []
+    this.parentId = parentId
+    this.childIds = childIds ? [...childIds] : []
+  }
 
-    if (subTasks) {
-      for (const task of subTasks) {
-        this.addSubTask(task)
-      }
-    }
-
-    this.parent = parent
+  /**
+   * Set the graph reference for this task (called by the store during initialization)
+   */
+  setGraph(graph: any): void {
+    this.graph = graph
   }
 
   get effectiveStartDate() {
@@ -81,49 +93,54 @@ export class TaskClass implements TaskClassContent {
     this.status = value ? Status.COMPLETED : Status.IN_PROGRESS
   }
 
-  /// Don't use this getter, it is not reactive and will not update the UI.
-  // get subTasks(): TaskClass[] {
-  //   return [...this.subTasks]
-  // }
-
   /**
-   * Add the subtask to the current task.
-   * If the subtask is already a child of the current task, this method does nothing.
-   * If the subtask already has a parent, it will be removed from the old parent.
-   * @param task The subtask to add.
+   * Get the ID of the parent task, or undefined if this is a root task.
+   * Use store methods like `moveTask()` to modify relationships.
    */
-  addSubTask(task: TaskClass): void {
-    if (this.subTasks.some(t => t.id === task.id)) return
-
-    if (task.parent) {
-      task.parent.removeSubTask(task)
-    }
-    this.subTasks.push(task)
-    task.parent = this
+  getParentId(): string | undefined {
+    return this.parentId
   }
 
   /**
-   * Remove the subtask from the current task.
-   * If the subtask is not a child of the current task, this method does nothing.
-   * @param task The subtask to remove.
-   * @returns void
+   * Get the IDs of all child tasks.
+   * Use store methods like `addSubTask()` or `moveTask()` to modify relationships.
    */
-  removeSubTask(task: TaskClass): void {
-    const index = this.subTasks.findIndex(t => t.id === task.id)
+  getChildrenIds(): string[] {
+    return [...this.childIds]
+  }
+
+  /**
+   * Set the parent ID (internal - keeps graph in sync if present)
+   */
+  setParentId(parentId: string | undefined): void {
+    this.parentId = parentId
+    if (this.graph) {
+      this.graph.setParent(this.id, parentId)
+    }
+  }
+
+  /**
+   * Add a child ID (internal - keeps graph in sync if present)
+   */
+  addChildId(childId: string): void {
+    if (!this.childIds.includes(childId)) {
+      this.childIds.push(childId)
+      if (this.graph) {
+        this.graph.addChild(this.id, childId)
+      }
+    }
+  }
+
+  /**
+   * Remove a child ID (internal - keeps graph in sync if present)
+   */
+  removeChildId(childId: string): void {
+    const index = this.childIds.indexOf(childId)
     if (index !== -1) {
-      this.subTasks.splice(index, 1)
-      task.parent = undefined
+      this.childIds.splice(index, 1)
+      if (this.graph) {
+        this.graph.removeChild(this.id, childId)
+      }
     }
-  }
-
-  /**
-   * Clear all subtasks of the current task.
-   * This will also remove the parent reference from each subtask.
-   */
-  clearSubTasks(): void {
-    for (const task of this.subTasks) {
-      task.parent = undefined
-    }
-    this.subTasks = []
   }
 }

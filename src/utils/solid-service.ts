@@ -2,6 +2,7 @@ import { bootSolidModels, SolidEngine } from 'soukai-solid'
 import { setEngine } from 'soukai'
 import Task from '@/models/Task'
 import { TaskClass, Status } from '@/types/task'
+import { TaskGraph } from '@/utils/task-graph'
 import { withTrailingSlash } from './url'
 
 const TASK_CONTAINER_NAME = 'planner/tasks/'
@@ -70,17 +71,25 @@ export class SolidTaskService {
   }
 
   /**
-   * Convert Soukai Task models to TaskClass objects
+   * Convert Soukai Task models to TaskClass objects with a TaskGraph
+   * Returns { taskClasses, graph } where taskClasses are root tasks and graph manages relationships
    */
-  async loadTasksAsTaskClasses(): Promise<TaskClass[]> {
+  async loadTasksAsTaskClasses(): Promise<{
+    taskClasses: TaskClass[]
+    graph: TaskGraph
+  }> {
     const tasks = await this.fetchTasks()
     return this.convertToTaskClasses(tasks)
   }
 
   /**
    * Convert Soukai Task models to TaskClass objects
+   * Returns { taskClasses, graph } where taskClasses includes ALL tasks (root and children)
    */
-  convertToTaskClasses(tasks: Task[]): TaskClass[] {
+  convertToTaskClasses(tasks: Task[]): {
+    taskClasses: TaskClass[]
+    graph: TaskGraph
+  } {
     const taskMap = new Map<string, TaskClass>()
     const taskByUrl = new Map<string, Task>()
 
@@ -103,32 +112,46 @@ export class SolidTaskService {
       taskMap.set(taskUrl, taskClass)
     }
 
-    // Second pass: establish parent-child relationships
+    // Second pass: establish parent-child relationships in TaskClass properties
     for (const task of tasks) {
       const taskUrl = task.url!
       const taskClass = taskMap.get(taskUrl)!
 
-      // Handle subtasks
+      // Handle subtasks - store IDs in TaskClass.childIds
       if (task.subTaskUrls && task.subTaskUrls.length > 0) {
         for (const subTaskUrl of task.subTaskUrls) {
           // Convert relative URLs to absolute for lookup
           const absoluteUrl = this.toAbsoluteUrl(subTaskUrl)
           const subTaskClass = taskMap.get(absoluteUrl)
           if (subTaskClass) {
-            taskClass.addSubTask(subTaskClass)
+            taskClass.childIds.push(subTaskClass.id)
+            subTaskClass.parentId = taskClass.id
           }
         }
       }
     }
 
-    // Return only root tasks (tasks without parents)
-    return Array.from(taskMap.values()).filter(task => !task.parent)
+    // Build graph from TaskClass data
+    const graph = TaskGraph.fromTasks(Array.from(taskMap.values()))
+
+    // Set graph reference for all tasks
+    for (const taskClass of taskMap.values()) {
+      taskClass.setGraph(graph)
+    }
+
+    // Return ALL tasks - store will organize them by relationships
+    const allTasks = Array.from(taskMap.values())
+
+    return { taskClasses: allTasks, graph }
   }
 
   /**
    * Save a single TaskClass to the Pod (incremental save)
    */
-  async saveTaskClass(taskClass: TaskClass): Promise<void> {
+  async saveTaskClass(
+    taskClass: TaskClass,
+    taskMap?: Map<string, TaskClass>,
+  ): Promise<void> {
     let task: Task
 
     if (taskClass.fullId) {
@@ -154,28 +177,11 @@ export class SolidTaskService {
 
   /**
    * Save TaskClass objects to the Pod (bulk save for initial load)
+   * Saves all tasks - the store will have already collected all descendants
    */
   async saveTaskClasses(taskClasses: TaskClass[]): Promise<void> {
-    // Collect all tasks (root + subtasks)
-    const allTasks: TaskClass[] = []
-    const visited = new Set<string>()
-
-    const collectTasks = (tc: TaskClass) => {
-      if (visited.has(tc.id)) return
-      visited.add(tc.id)
-      allTasks.push(tc)
-
-      for (const subTask of tc.subTasks) {
-        collectTasks(subTask)
-      }
-    }
-
-    for (const task of taskClasses) {
-      collectTasks(task)
-    }
-
-    // Save tasks sequentially
-    for (const taskClass of allTasks) {
+    // Save all provided tasks sequentially
+    for (const taskClass of taskClasses) {
       await this.saveTaskClass(taskClass)
     }
   }
@@ -191,19 +197,16 @@ export class SolidTaskService {
     task.endDate = taskClass.endDate
     task.status = taskClass.status
 
-    // Set subtask URLs (as relative paths)
-    if (taskClass.subTasks.length > 0) {
-      task.subTaskUrls = taskClass.subTasks
-        .map(sub => sub.fullId)
-        .filter((url): url is string => !!url)
-        .map(url => this.toRelativeUrl(url))
+    // Set subtask IDs (Soukai will handle URL conversion)
+    if (taskClass.childIds.length > 0) {
+      task.subTaskUrls = taskClass.childIds
     } else {
       task.subTaskUrls = undefined
     }
 
-    // Set parent task URL if exists (as relative path)
-    if (taskClass.parent?.fullId) {
-      task.parentTaskUrl = this.toRelativeUrl(taskClass.parent.fullId)
+    // Set parent task ID (Soukai will handle URL conversion)
+    if (taskClass.parentId) {
+      task.parentTaskUrl = taskClass.parentId
     } else {
       task.parentTaskUrl = undefined
     }
@@ -227,17 +230,16 @@ export class SolidTaskService {
     task.endDate = taskClass.endDate
     task.status = taskClass.status
 
-    // Set subtask URLs (as relative paths)
-    if (taskClass.subTasks.length > 0) {
-      task.subTaskUrls = taskClass.subTasks
-        .map(sub => sub.fullId)
-        .filter((url): url is string => !!url)
-        .map(url => this.toRelativeUrl(url))
+    // Set subtask IDs (Soukai will handle URL conversion)
+    if (taskClass.childIds.length > 0) {
+      task.subTaskUrls = taskClass.childIds
+    } else {
+      task.subTaskUrls = undefined
     }
 
-    // Set parent task URL if exists (as relative path)
-    if (taskClass.parent?.fullId) {
-      task.parentTaskUrl = this.toRelativeUrl(taskClass.parent.fullId)
+    // Set parent task ID (Soukai will handle URL conversion)
+    if (taskClass.parentId) {
+      task.parentTaskUrl = taskClass.parentId
     }
 
     return task

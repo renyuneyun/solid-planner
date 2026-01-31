@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { Status, TaskClass } from '@/types/task'
+import { TaskGraph } from '@/utils/task-graph'
 
 function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
   if (v1 && v2 === undefined) return 1
@@ -10,7 +11,8 @@ function existsOrCompare(v1: any, v2: any, fn: (v1: any, v2: any) => number) {
 
 export const useTaskStore = defineStore('tasks', {
   state: () => ({
-    taskClassMap: new Map<string, TaskClass>(),
+    taskMap: new Map<string, TaskClass>(),
+    graph: new TaskGraph(), // Initialize empty graph immediately
     loading: false,
     error: null as string | null,
   }),
@@ -35,77 +37,151 @@ export const useTaskStore = defineStore('tasks', {
       )
     },
     tasks(state): TaskClass[] {
-      return [...state.taskClassMap.values()]
+      return [...state.taskMap.values()]
     },
     rootTasks(state): TaskClass[] {
-      const ret = this.tasks.filter(task => task.parent === undefined)
-      return ret
+      const rootIds = state.graph.getRootIds()
+      return rootIds
+        .map(id => state.taskMap.get(id))
+        .filter((task): task is TaskClass => !!task)
     },
   },
   actions: {
     /**
-     * Load TaskClass objects (replaces current tasks)
+     * Load TaskClass objects with their relationship graph
+     * Replaces current tasks and graph
      */
-    loadTaskClasses(taskClasses: TaskClass[]) {
-      this.taskClassMap.clear()
+    loadTaskClasses(taskClasses: TaskClass[], graph: TaskGraph) {
+      this.taskMap.clear()
 
-      // Collect all tasks (root + subtasks) recursively
-      const visited = new Set<string>()
-
-      const collectTasks = (tc: TaskClass) => {
-        if (visited.has(tc.id)) return
-        visited.add(tc.id)
-        this.taskClassMap.set(tc.id, tc)
-
-        for (const subTask of tc.subTasks) {
-          collectTasks(subTask)
-        }
+      // Add all tasks to map first
+      for (const task of taskClasses) {
+        this.taskMap.set(task.id, task)
       }
 
-      for (const task of taskClasses) {
-        collectTasks(task)
+      // Rebuild graph from task data (parentId/childIds are source of truth)
+      this.graph = graph
+      this.graph.rebuildFromTasks(taskClasses)
+
+      // Set graph reference for all tasks (for optional syncing)
+      for (const task of this.taskMap.values()) {
+        task.setGraph(this.graph)
       }
     },
 
     /**
-     * Add a new TaskClass to local state
-     * Note: Call saveToPod() separately to persist to Solid Pod
+     * Recursively add task and all descendants to the map
+     */
+    addTaskToMapRecursive(task: TaskClass) {
+      if (!this.taskMap.has(task.id)) {
+        this.taskMap.set(task.id, task)
+      }
+    },
+
+    /**
+     * Add a new TaskClass to the store (not as a child of anything yet)
      */
     addTaskClass(taskClass: TaskClass) {
-      this.taskClassMap.set(taskClass.id, taskClass)
+      taskClass.setGraph(this.graph)
+      this.taskMap.set(taskClass.id, taskClass)
+      // Ensure it's registered as a root task in the graph
+      this.graph.setParent(taskClass.id, undefined)
     },
 
     /**
-     * Remove a TaskClass from local state
-     * Note: Call saveToPod() separately to persist to Solid Pod
+     * Add a task as a child of another task
      */
-    removeTaskClass(taskClass: TaskClass) {
-      this.taskClassMap.delete(taskClass.id)
+    addSubTask(parentId: string, childTask: TaskClass) {
+      const parent = this.taskMap.get(parentId)
+      if (!parent) {
+        console.warn(`Parent task ${parentId} not found`)
+        return
+      }
 
-      // Also remove all subtasks recursively
-      const removeSubtasks = (tc: TaskClass) => {
-        for (const subTask of tc.subTasks) {
-          this.taskClassMap.delete(subTask.id)
-          removeSubtasks(subTask)
+      childTask.setGraph(this.graph)
+      this.taskMap.set(childTask.id, childTask)
+
+      // Update TaskClass relationships (source of truth)
+      childTask.setParentId(parentId)
+      parent.addChildId(childTask.id)
+    },
+
+    /**
+     * Remove a task and all its descendants
+     */
+    removeTaskClass(taskId: string) {
+      const task = this.taskMap.get(taskId)
+      if (!task) return
+
+      // Get all descendants before removal
+      const descendantIds = this.graph.getAllDescendantIds(taskId)
+
+      // Remove from parent's childIds
+      if (task.parentId) {
+        const parent = this.taskMap.get(task.parentId)
+        if (parent) {
+          parent.removeChildId(taskId)
         }
       }
-      removeSubtasks(taskClass)
+
+      // Remove all descendants from map
+      for (const id of descendantIds) {
+        this.taskMap.delete(id)
+      }
+
+      // Clean up graph
+      this.graph.removeTaskAndDescendants(taskId)
     },
 
     /**
-     * Update a TaskClass in local state (it's already reactive, so just trigger update)
-     * Note: Call saveToPod() separately to persist to Solid Pod
+     * Update a TaskClass in the store
      */
     updateTaskClass(taskClass: TaskClass) {
-      // TaskClass is already reactive, just ensure it's in the map
-      this.taskClassMap.set(taskClass.id, taskClass)
+      this.taskMap.set(taskClass.id, taskClass)
     },
 
     /**
-     * Clear all tasks from local state
+     * Move a task under a new parent
+     */
+    moveTask(taskId: string, newParentId: string | undefined) {
+      const task = this.taskMap.get(taskId)
+      if (!task) {
+        console.warn(`Task ${taskId} not found`)
+        return
+      }
+
+      const oldParentId = task.parentId
+
+      if (oldParentId === newParentId) {
+        return // Already in the right place
+      }
+
+      // Remove from old parent's childIds
+      if (oldParentId !== undefined) {
+        const oldParent = this.taskMap.get(oldParentId)
+        if (oldParent) {
+          oldParent.removeChildId(taskId)
+        }
+      }
+
+      // Update task's parentId
+      task.setParentId(newParentId)
+
+      // Add to new parent's childIds
+      if (newParentId !== undefined) {
+        const newParent = this.taskMap.get(newParentId)
+        if (newParent) {
+          newParent.addChildId(taskId)
+        }
+      }
+    },
+
+    /**
+     * Clear all tasks from the store
      */
     clearTasks() {
-      this.taskClassMap.clear()
+      this.taskMap.clear()
+      this.graph.clear()
     },
   },
 })

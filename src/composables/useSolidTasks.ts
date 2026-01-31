@@ -59,8 +59,9 @@ export function useSolidTasks() {
     error.value = null
 
     try {
-      const taskClasses = await solidService.value.loadTasksAsTaskClasses()
-      taskStore.loadTaskClasses(taskClasses)
+      const { taskClasses, graph } =
+        await solidService.value.loadTasksAsTaskClasses()
+      taskStore.loadTaskClasses(taskClasses, graph)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
       console.error('Failed to load tasks:', err)
@@ -82,11 +83,11 @@ export function useSolidTasks() {
     error.value = null
 
     try {
-      // Get all root TaskClass objects
-      const taskClasses = taskStore.rootTasks
+      // Save ALL tasks (including children) - Soukai will handle the parent/child relationships
+      const allTasks = Array.from(taskStore.taskMap.values())
 
       // Save to Pod
-      await solidService.value.saveTaskClasses(taskClasses)
+      await solidService.value.saveTaskClasses(allTasks)
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to save tasks'
       console.error('Failed to save tasks:', err)
@@ -139,17 +140,26 @@ export function useSolidTasks() {
   /**
    * Remove a TaskClass and delete from Pod (incremental)
    */
-  async function removeTaskAndSave(taskClass: TaskClass) {
+  async function removeTaskAndSave(taskOrId: TaskClass | string) {
     if (!solidService.value) {
       error.value = 'Not connected to Solid Pod'
       return
     }
 
-    taskStore.removeTaskClass(taskClass)
+    const taskId = typeof taskOrId === 'string' ? taskOrId : taskOrId.id
+    const task =
+      typeof taskOrId === 'string' ? taskStore.taskMap.get(taskOrId) : taskOrId
+
+    if (!task) {
+      error.value = `Task ${taskId} not found`
+      return
+    }
+
+    taskStore.removeTaskClass(taskId)
 
     try {
-      if (taskClass.fullId) {
-        await solidService.value.deleteTask(taskClass.fullId)
+      if (task.fullId) {
+        await solidService.value.deleteTask(task.fullId)
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to delete task'
