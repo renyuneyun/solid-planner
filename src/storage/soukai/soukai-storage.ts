@@ -148,10 +148,7 @@ export class SolidTaskService {
   /**
    * Save a single TaskClass to the Pod (incremental save)
    */
-  async saveTaskClass(
-    taskClass: TaskClass,
-    taskMap?: Map<string, TaskClass>,
-  ): Promise<void> {
+  async saveTaskClass(taskClass: TaskClass): Promise<void> {
     let task: Task
 
     if (taskClass.fullId) {
