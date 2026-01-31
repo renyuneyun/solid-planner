@@ -14,7 +14,7 @@
 
 - [ ] Prefixes not exist in the Turtle file.
 - [ ] Provide testing suits
-  - [ ] Unit tests
+  - [x] Unit tests
   - [ ] Other tests with mock components
 
 ## Low priority -- do these only after finishing the above

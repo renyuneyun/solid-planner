@@ -10,7 +10,11 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",
     "lint": "eslint . --fix",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@inrupt/solid-client": "^1.23.1",
@@ -42,16 +46,21 @@
     "@types/rdfjs__namespace": "^2.0.10",
     "@types/shexj": "^2.1.7",
     "@vitejs/plugin-vue": "^5.1.4",
+    "@vitest/ui": "^3.2.4",
     "@vue/eslint-config-prettier": "^10.0.0",
     "@vue/eslint-config-typescript": "^14.1.1",
+    "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.5.1",
     "eslint": "^9.13.0",
     "eslint-plugin-vue": "^9.29.0",
+    "happy-dom": "^20.4.0",
+    "jsdom": "^27.0.1",
     "npm-run-all2": "^7.0.1",
     "prettier": "^3.3.3",
     "typescript": "~5.6.0",
     "unplugin-vue-components": "^28.5.0",
     "vite": "^5.4.10",
+    "vitest": "^3.2.4",
     "vue-tsc": "^2.1.6"
   }
 }

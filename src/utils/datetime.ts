@@ -13,9 +13,14 @@ export function isToday(dateStr: string) {
 export function isThisWeek(dateStr: string) {
   const date = new Date(dateStr)
   const today = new Date()
-  const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()))
+  const startOfWeekBase = new Date(today)
+  const endOfWeekBase = new Date(today)
+
+  const startOfWeek = new Date(
+    startOfWeekBase.setDate(startOfWeekBase.getDate() - startOfWeekBase.getDay()),
+  )
   const endOfWeek = new Date(
-    today.setDate(today.getDate() - today.getDay() + 7),
+    endOfWeekBase.setDate(endOfWeekBase.getDate() - endOfWeekBase.getDay() + 7),
   )
   return date >= startOfWeek && date <= endOfWeek
 }

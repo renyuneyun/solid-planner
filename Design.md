@@ -49,6 +49,7 @@ You are free to choose most of the architectural and technical designs, but need
   - This abstraction also allows to have projected/derived/computed fields for the objects, allowing easier data usage, which would not affect the underlying data unless necessary.
 - The UI shall respond fast: when user clicks a button, the UI shall update quickly, even if the Internet is slow. If possible, store that as local values, and wait for Internet sync to complete (or fail, and possibly fallback). I believe there are appropriate libraries for that.
 - Don't over-engineer the solution, and keep the codebase maintainable.
+- Write tests where helpful or necessary
 
 ## Additional notes
 
