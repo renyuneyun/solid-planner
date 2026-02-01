@@ -68,29 +68,37 @@ export class IndexedDBTaskStorage {
 
   /**
    * Save task to local storage
+   * Accepts dates as either Date objects or ISO strings for flexibility
    */
   async saveTask(task: {
     url: string
     title: string
     description?: string
     priority?: number
-    dateCreated?: Date
-    startDate?: Date
-    endDate?: Date
+    dateCreated?: Date | string
+    startDate?: Date | string
+    endDate?: Date | string
     status?: string
     subTaskUrls?: string[]
     parentTaskUrl?: string
   }): Promise<void> {
     if (!this.db) await this.init()
 
+    // Helper to convert Date | string to ISO string
+    const toISOString = (date?: Date | string): string | undefined => {
+      if (!date) return undefined
+      if (typeof date === 'string') return date
+      return date.toISOString()
+    }
+
     const taskData = {
       url: task.url,
       title: task.title,
       description: task.description,
       priority: task.priority,
-      dateCreated: task.dateCreated?.toISOString(),
-      startDate: task.startDate?.toISOString(),
-      endDate: task.endDate?.toISOString(),
+      dateCreated: toISOString(task.dateCreated),
+      startDate: toISOString(task.startDate),
+      endDate: toISOString(task.endDate),
       status: task.status,
       subTaskUrls: task.subTaskUrls,
       parentTaskUrl: task.parentTaskUrl,

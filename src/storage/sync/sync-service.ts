@@ -189,19 +189,8 @@ export class SyncService {
         const localTask = localTasks.find(t => t.url === oldUrl)
         if (localTask) {
           await this.localStore.deleteTask(oldUrl)
-          // Convert ISO strings back to Date objects for saveTask
-          await this.localStore.saveTask({
-            url: newUrl,
-            title: localTask.title,
-            description: localTask.description,
-            priority: localTask.priority,
-            dateCreated: localTask.dateCreated ? new Date(localTask.dateCreated) : undefined,
-            startDate: localTask.startDate ? new Date(localTask.startDate) : undefined,
-            endDate: localTask.endDate ? new Date(localTask.endDate) : undefined,
-            status: localTask.status,
-            subTaskUrls: localTask.subTaskUrls,
-            parentTaskUrl: localTask.parentTaskUrl,
-          })
+          // saveTask now handles both Date objects and ISO strings
+          await this.localStore.saveTask({ ...localTask, url: newUrl })
           await this.localStore.markAsSynced(newUrl)
         }
       }
@@ -218,7 +207,7 @@ export class SyncService {
 
         if (!localTask) {
           // New remote task: add to local
-          await this.addLocalTask(remoteTask)
+          await this.syncRemoteToLocal(remoteTask)
         } else if (localTask.syncStatus === 'synced') {
           // Both synced: check if remote is newer
           const localTime = new Date(localTask.lastModified).getTime()
@@ -226,7 +215,7 @@ export class SyncService {
           
           if (remoteTime > localTime) {
             // Remote is newer: update local
-            await this.updateLocalTask(remoteTask)
+            await this.syncRemoteToLocal(remoteTask)
           }
         }
         // If localTask.syncStatus === 'pending', we already handled it in phase 1
@@ -317,46 +306,18 @@ export class SyncService {
       await remoteTask.save()
     } else {
       // Remote is newer or equal: update local
-      await this.updateLocalTask(remoteTask)
+      await this.syncRemoteToLocal(remoteTask)
     }
   }
 
   /**
-   * Add a remote task to local storage
+   * Sync remote task to local storage
+   * Used for both adding new tasks and updating existing ones
    */
-  private async addLocalTask(remoteTask: Task): Promise<void> {
-    await this.localStore.saveTask({
-      url: remoteTask.url!,
-      title: remoteTask.title,
-      description: remoteTask.description,
-      priority: remoteTask.priority,
-      dateCreated: remoteTask.dateCreated,
-      startDate: remoteTask.startDate,
-      endDate: remoteTask.endDate,
-      status: remoteTask.status,
-      subTaskUrls: remoteTask.subTaskUrls,
-      parentTaskUrl: remoteTask.parentTaskUrl,
-    })
-    await this.localStore.markAsSynced(remoteTask.url!)
-  }
-
-  /**
-   * Update local task with remote data
-   */
-  private async updateLocalTask(remoteTask: Task): Promise<void> {
-    await this.localStore.saveTask({
-      url: remoteTask.url!,
-      title: remoteTask.title,
-      description: remoteTask.description,
-      priority: remoteTask.priority,
-      dateCreated: remoteTask.dateCreated,
-      startDate: remoteTask.startDate,
-      endDate: remoteTask.endDate,
-      status: remoteTask.status,
-      subTaskUrls: remoteTask.subTaskUrls,
-      parentTaskUrl: remoteTask.parentTaskUrl,
-    })
-    await this.localStore.markAsSynced(remoteTask.url!)
+  private async syncRemoteToLocal(remoteTask: Task): Promise<void> {
+    const { url, title, description, priority, dateCreated, startDate, endDate, status, subTaskUrls, parentTaskUrl } = remoteTask
+    await this.localStore.saveTask({ url: url!, title, description, priority, dateCreated, startDate, endDate, status, subTaskUrls, parentTaskUrl })
+    await this.localStore.markAsSynced(url!)
   }
 
   /**
