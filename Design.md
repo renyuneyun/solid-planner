@@ -49,7 +49,9 @@ You are free to choose most of the architectural and technical designs, but need
   - This abstraction also allows to have projected/derived/computed fields for the objects, allowing easier data usage, which would not affect the underlying data unless necessary.
 - The UI shall respond fast: when user clicks a button, the UI shall update quickly, even if the Internet is slow. If possible, store that as local values, and wait for Internet sync to complete (or fail, and possibly fallback). I believe there are appropriate libraries for that.
 - Don't over-engineer the solution, and keep the codebase maintainable.
-- Write tests where helpful or necessary
+- The app is still in rapid development, so any changes to interfaces are expected -- you don't need to keep API backward compatibility unnecessarily.
+- Write tests where helpful or necessary.
+- For each task I assign to you, please let me know if it makes sense, or discuss with me if needed.
 
 ## Tests
 
