@@ -179,7 +179,9 @@ export class IndexedDBTaskStorage {
   /**
    * Get metadata value
    */
-  async getMetadata(key: string): Promise<string | number | boolean | undefined> {
+  async getMetadata(
+    key: string,
+  ): Promise<string | number | boolean | undefined> {
     if (!this.db) await this.init()
     const result = await this.db!.get('metadata', key)
     return result?.value
@@ -188,7 +190,10 @@ export class IndexedDBTaskStorage {
   /**
    * Set metadata value
    */
-  async setMetadata(key: string, value: string | number | boolean): Promise<void> {
+  async setMetadata(
+    key: string,
+    value: string | number | boolean,
+  ): Promise<void> {
     if (!this.db) await this.init()
     await this.db!.put('metadata', { key, value })
   }

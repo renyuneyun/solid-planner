@@ -20,7 +20,10 @@ export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline'
 /**
  * Sync conflict resolution strategy
  */
-export type ConflictResolution = 'local-wins' | 'remote-wins' | 'last-write-wins'
+export type ConflictResolution =
+  | 'local-wins'
+  | 'remote-wins'
+  | 'last-write-wins'
 
 /**
  * Redesigned sync service using proper three-way merge
@@ -171,7 +174,9 @@ export class SyncService {
           // This means it was deleted on another device
           if (localTask.syncStatus === 'synced') {
             // Was synced before, now gone - respect the deletion
-            console.log(`Task ${localTask.url} deleted remotely, removing locally`)
+            console.log(
+              `Task ${localTask.url} deleted remotely, removing locally`,
+            )
             await this.localStore.deleteTask(localTask.url)
           }
           // If syncStatus is 'pending', it means local modifications since last sync
@@ -179,7 +184,9 @@ export class SyncService {
           // - Recreate it remotely (local wins)
           // - Delete it locally (remote wins)
           // For now, we'll delete it locally to respect remote deletion
-          console.log(`Task ${localTask.url} had pending changes but was deleted remotely, removing locally`)
+          console.log(
+            `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
+          )
           await this.localStore.deleteTask(localTask.url)
         }
       }
@@ -197,7 +204,9 @@ export class SyncService {
 
       // PHASE 3: Process remote tasks (pull to local)
       for (const remoteTask of remoteTasks) {
-        const wasRenamed = Array.from(urlMapping.values()).includes(remoteTask.url!)
+        const wasRenamed = Array.from(urlMapping.values()).includes(
+          remoteTask.url!,
+        )
         if (wasRenamed) {
           // Already handled in phase 2
           continue
@@ -211,8 +220,11 @@ export class SyncService {
         } else if (localTask.syncStatus === 'synced') {
           // Both synced: check if remote is newer
           const localTime = new Date(localTask.lastModified).getTime()
-          const remoteTime = remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
-          
+          const remoteTime =
+            remoteTask.updatedAt?.getTime() ||
+            remoteTask.createdAt?.getTime() ||
+            0
+
           if (remoteTime > localTime) {
             // Remote is newer: update local
             await this.syncRemoteToLocal(remoteTask)
@@ -258,9 +270,15 @@ export class SyncService {
     newTask.title = localTask.title
     newTask.description = localTask.description
     newTask.priority = localTask.priority
-    newTask.dateCreated = localTask.dateCreated ? new Date(localTask.dateCreated) : undefined
-    newTask.startDate = localTask.startDate ? new Date(localTask.startDate) : undefined
-    newTask.endDate = localTask.endDate ? new Date(localTask.endDate) : undefined
+    newTask.dateCreated = localTask.dateCreated
+      ? new Date(localTask.dateCreated)
+      : undefined
+    newTask.startDate = localTask.startDate
+      ? new Date(localTask.startDate)
+      : undefined
+    newTask.endDate = localTask.endDate
+      ? new Date(localTask.endDate)
+      : undefined
     newTask.status = localTask.status
     newTask.subTaskUrls = localTask.subTaskUrls
     newTask.parentTaskUrl = localTask.parentTaskUrl
@@ -287,19 +305,24 @@ export class SyncService {
       parentTaskUrl?: string
       lastModified: string
     },
-    remoteTask: Task
+    remoteTask: Task,
   ): Promise<void> {
     // Compare timestamps for last-write-wins
     const localTime = new Date(localTask.lastModified).getTime()
-    const remoteTime = remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
+    const remoteTime =
+      remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
 
     if (localTime > remoteTime) {
       // Local is newer: update remote
       remoteTask.title = localTask.title
       remoteTask.description = localTask.description
       remoteTask.priority = localTask.priority
-      remoteTask.startDate = localTask.startDate ? new Date(localTask.startDate) : undefined
-      remoteTask.endDate = localTask.endDate ? new Date(localTask.endDate) : undefined
+      remoteTask.startDate = localTask.startDate
+        ? new Date(localTask.startDate)
+        : undefined
+      remoteTask.endDate = localTask.endDate
+        ? new Date(localTask.endDate)
+        : undefined
       remoteTask.status = localTask.status
       remoteTask.subTaskUrls = localTask.subTaskUrls
       remoteTask.parentTaskUrl = localTask.parentTaskUrl
@@ -315,8 +338,30 @@ export class SyncService {
    * Used for both adding new tasks and updating existing ones
    */
   private async syncRemoteToLocal(remoteTask: Task): Promise<void> {
-    const { url, title, description, priority, dateCreated, startDate, endDate, status, subTaskUrls, parentTaskUrl } = remoteTask
-    await this.localStore.saveTask({ url: url!, title, description, priority, dateCreated, startDate, endDate, status, subTaskUrls, parentTaskUrl })
+    const {
+      url,
+      title,
+      description,
+      priority,
+      dateCreated,
+      startDate,
+      endDate,
+      status,
+      subTaskUrls,
+      parentTaskUrl,
+    } = remoteTask
+    await this.localStore.saveTask({
+      url: url!,
+      title,
+      description,
+      priority,
+      dateCreated,
+      startDate,
+      endDate,
+      status,
+      subTaskUrls,
+      parentTaskUrl,
+    })
     await this.localStore.markAsSynced(url!)
   }
 

@@ -231,7 +231,7 @@ export function useSolidTasks() {
         solidService.value = null
         syncService.setRemoteService(null)
         syncService.stopAutoSync()
-        
+
         if (isInitialLoad.value) {
           // Initial load - load from local storage
           await loadFromPod()
