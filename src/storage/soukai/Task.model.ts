@@ -3,8 +3,13 @@ import { SolidModel } from 'soukai-solid'
 
 /**
  * Soukai model for Task, using schema.org/Action as RDF type
+ * Enables history tracking for CRDT-like synchronization
  */
 export default class Task extends SolidModel {
+  // Enable history tracking for local-first/CRDT support
+  static history = true
+  static tombstone = true // Keep tombstones for deleted tasks
+
   static rdfContexts = {
     schema: 'https://schema.org/',
   }
@@ -64,4 +69,8 @@ export default class Task extends SolidModel {
   declare status?: string
   declare subTaskUrls?: string[]
   declare parentTaskUrl?: string
+
+  // Soukai automatic timestamps
+  declare createdAt?: Date
+  declare updatedAt?: Date
 }

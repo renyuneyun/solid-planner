@@ -183,5 +183,16 @@ export const useTaskStore = defineStore('tasks', {
       this.taskMap.clear()
       this.graph.clear()
     },
+
+    /**
+     * Convert tasks to graph structure
+     */
+    convertTasksToGraph(tasks: TaskClass[]) {
+      const graph = TaskGraph.fromTasks(tasks)
+      for (const task of tasks) {
+        task.setGraph(graph)
+      }
+      return { taskClasses: tasks, graph }
+    },
   },
 })

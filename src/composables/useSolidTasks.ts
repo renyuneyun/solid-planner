@@ -7,10 +7,13 @@ import {
 } from '@/storage/soukai/soukai-storage'
 import { TaskClass } from '@/models/TaskClass'
 import { findStorage } from '@renyuneyun/solid-helper'
+import { getIndexedDBStorage } from '@/storage/local/indexeddb-storage'
+import { getSyncService } from '@/storage/sync/sync-service'
+import type { SyncStatus } from '@/storage/sync/sync-service'
 
 /**
  * Composable for managing tasks with Solid Pod integration
- * Handles authentication, loading, and saving tasks
+ * Handles authentication, loading, and saving tasks with local-first sync
  */
 export function useSolidTasks() {
   const sessionStore = useSessionStore()
@@ -19,9 +22,23 @@ export function useSolidTasks() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const solidService = ref<SolidTaskService | null>(null)
+  const syncStatus = ref<SyncStatus>('idle')
+
+  // Initialize storage services
+  const localStore = getIndexedDBStorage()
+  const syncService = getSyncService(localStore)
 
   const isAuthenticated = computed(() => !!sessionStore.webid)
   const hasService = computed(() => !!solidService.value)
+  const isOnline = computed(() => syncStatus.value !== 'offline')
+
+  // Track if this is initial load vs logout
+  const isInitialLoad = ref(true)
+
+  // Subscribe to sync status changes
+  syncService.onStatusChange(status => {
+    syncStatus.value = status
+  })
 
   /**
    * Initialize the Solid service when user logs in
@@ -29,6 +46,7 @@ export function useSolidTasks() {
   async function initializeService() {
     if (!sessionStore.webid || !sessionStore.session?.fetch) {
       solidService.value = null
+      syncService.setRemoteService(null)
       return
     }
 
@@ -42,6 +60,10 @@ export function useSolidTasks() {
         storageUrl,
         sessionStore.session.fetch,
       )
+      syncService.setRemoteService(solidService.value)
+
+      // Start auto-sync every minute when authenticated
+      syncService.startAutoSync(60000)
     } catch (err) {
       error.value =
         err instanceof Error ? err.message : 'Failed to initialize service'
@@ -50,21 +72,37 @@ export function useSolidTasks() {
   }
 
   /**
-   * Load tasks from the Solid Pod
+   * Load tasks from local storage first, then sync with remote
+   * This provides instant UI updates while syncing in the background
+   * Works both online and offline
    */
   async function loadFromPod() {
-    if (!solidService.value) {
-      error.value = 'Not connected to Solid Pod'
-      return
-    }
-
     isLoading.value = true
     error.value = null
 
     try {
-      const { taskClasses, graph } =
-        await solidService.value.loadTasksAsTaskClasses()
-      taskStore.loadTaskClasses(taskClasses, graph)
+      // First, load from local storage (instant, works offline)
+      const localTasks = await syncService.loadLocal()
+      if (localTasks.length > 0) {
+        const { graph } = taskStore.convertTasksToGraph(localTasks)
+        taskStore.loadTaskClasses(localTasks, graph)
+      }
+
+      // Then sync with remote in background (if authenticated)
+      if (solidService.value) {
+        // Wait for sync to complete
+        await syncService.sync().catch(err => {
+          console.error('Background sync failed:', err)
+          error.value = err instanceof Error ? err.message : 'Sync failed'
+        })
+
+        // Reload from local storage after sync
+        const updatedTasks = await syncService.loadLocal()
+        if (updatedTasks.length > 0) {
+          const { graph } = taskStore.convertTasksToGraph(updatedTasks)
+          taskStore.loadTaskClasses(updatedTasks, graph)
+        }
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
       console.error('Failed to load tasks:', err)
@@ -74,45 +112,52 @@ export function useSolidTasks() {
   }
 
   /**
-   * Save all tasks to the Solid Pod
+   * Save all tasks (local-first, then sync)
    */
   async function saveToPod() {
-    if (!solidService.value) {
-      error.value = 'Not connected to Solid Pod'
-      return
-    }
-
     isLoading.value = true
     error.value = null
 
     try {
-      // Save ALL tasks (including children) - Soukai will handle the parent/child relationships
+      // Save to local storage first (instant)
       const allTasks = Array.from(taskStore.taskMap.values())
+      for (const task of allTasks) {
+        await syncService.saveLocal(task)
+      }
 
-      // Save to Pod
-      await solidService.value.saveTaskClasses(allTasks)
+      // Then sync to remote in background
+      if (solidService.value) {
+        syncService.sync().catch(err => {
+          console.error('Background sync failed:', err)
+          error.value = err instanceof Error ? err.message : 'Sync failed'
+        })
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to save tasks'
       console.error('Failed to save tasks:', err)
-      throw err // Re-throw so caller can handle
+      throw err
     } finally {
       isLoading.value = false
     }
   }
 
   /**
-   * Add a new TaskClass and save to Pod (incremental)
+   * Add a new TaskClass (local-first, then sync)
    */
   async function addTaskAndSave(taskClass: TaskClass) {
-    if (!solidService.value) {
-      error.value = 'Not connected to Solid Pod'
-      return
-    }
-
+    // Add to store
     taskStore.addTaskClass(taskClass)
 
     try {
-      await solidService.value.saveTaskClass(taskClass)
+      // Save to local storage first (instant)
+      await syncService.saveLocal(taskClass)
+
+      // Then sync to remote in background
+      if (solidService.value) {
+        syncService.sync().catch(err => {
+          console.error('Background sync failed:', err)
+        })
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to save task'
       console.error('Failed to save task:', err)
@@ -121,18 +166,22 @@ export function useSolidTasks() {
   }
 
   /**
-   * Update a TaskClass and save to Pod (incremental)
+   * Update a TaskClass (local-first, then sync)
    */
   async function updateTaskAndSave(taskClass: TaskClass) {
-    if (!solidService.value) {
-      error.value = 'Not connected to Solid Pod'
-      return
-    }
-
+    // Update in store
     taskStore.updateTaskClass(taskClass)
 
     try {
-      await solidService.value.saveTaskClass(taskClass)
+      // Save to local storage first (instant)
+      await syncService.saveLocal(taskClass)
+
+      // Then sync to remote in background
+      if (solidService.value) {
+        syncService.sync().catch(err => {
+          console.error('Background sync failed:', err)
+        })
+      }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to update task'
       console.error('Failed to update task:', err)
@@ -141,14 +190,9 @@ export function useSolidTasks() {
   }
 
   /**
-   * Remove a TaskClass and delete from Pod (incremental)
+   * Remove a TaskClass (local-first, then sync)
    */
   async function removeTaskAndSave(taskOrId: TaskClass | string) {
-    if (!solidService.value) {
-      error.value = 'Not connected to Solid Pod'
-      return
-    }
-
     const taskId = typeof taskOrId === 'string' ? taskOrId : taskOrId.id
     const task =
       typeof taskOrId === 'string' ? taskStore.taskMap.get(taskOrId) : taskOrId
@@ -158,11 +202,13 @@ export function useSolidTasks() {
       return
     }
 
+    // Remove from store
     taskStore.removeTaskClass(taskId)
 
     try {
+      // Delete from local and remote
       if (task.fullId) {
-        await solidService.value.deleteTask(task.fullId)
+        await syncService.deleteTask(task.fullId)
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to delete task'
@@ -174,14 +220,25 @@ export function useSolidTasks() {
   // Watch for authentication changes
   watch(
     () => sessionStore.webid,
-    async newWebId => {
+    async (newWebId, oldWebId) => {
       if (newWebId) {
+        // User logged in
         await initializeService()
         await loadFromPod()
+        isInitialLoad.value = false
       } else {
-        // User logged out - clear service and tasks
+        // User logged out or initial load without auth
         solidService.value = null
-        taskStore.clearTasks()
+        syncService.setRemoteService(null)
+        syncService.stopAutoSync()
+        
+        if (isInitialLoad.value) {
+          // Initial load - load from local storage
+          await loadFromPod()
+          isInitialLoad.value = false
+        }
+        // Note: We don't clear tasks on logout - this is a local-first app
+        // Local tasks remain accessible, only remote sync stops
       }
     },
     { immediate: true },
@@ -193,6 +250,8 @@ export function useSolidTasks() {
     error,
     isAuthenticated,
     hasService,
+    isOnline,
+    syncStatus,
 
     // Methods
     initializeService,
@@ -201,5 +260,8 @@ export function useSolidTasks() {
     addTaskAndSave,
     updateTaskAndSave,
     removeTaskAndSave,
+
+    // Sync methods
+    manualSync: () => syncService.sync(),
   }
 }

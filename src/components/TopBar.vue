@@ -3,7 +3,15 @@
     <div class="top-bar-content">
       <BrandLogo />
       <Navigation />
-      <UserSection />
+      <div class="top-bar-right">
+        <SyncStatus
+          v-if="isAuthenticated"
+          :status="syncStatus"
+          :showSyncButton="true"
+          @sync="handleManualSync"
+        />
+        <UserSection />
+      </div>
     </div>
   </div>
 </template>
@@ -12,6 +20,18 @@
 import BrandLogo from './TopBar/BrandLogo.vue'
 import Navigation from './TopBar/Navigation.vue'
 import UserSection from './TopBar/UserSection.vue'
+import SyncStatus from './SyncStatus.vue'
+import { useSolidTasks } from '@/composables/useSolidTasks'
+
+const { syncStatus, isAuthenticated, manualSync } = useSolidTasks()
+
+async function handleManualSync() {
+  try {
+    await manualSync()
+  } catch (err) {
+    console.error('Manual sync failed:', err)
+  }
+}
 </script>
 
 <style scoped>
@@ -34,10 +54,20 @@ import UserSection from './TopBar/UserSection.vue'
   justify-content: space-between;
 }
 
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .top-bar-content {
     padding: 0 0.5rem;
+  }
+
+  .top-bar-right {
+    gap: 0.5rem;
   }
 }
 </style>

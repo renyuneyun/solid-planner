@@ -25,6 +25,7 @@ declare module 'vue' {
     Navigation: typeof import('./src/components/TopBar/Navigation.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SyncStatus: typeof import('./src/components/SyncStatus.vue')['default']
     TaskForm: typeof import('./src/components/TaskForm.vue')['default']
     TaskItem: typeof import('./src/components/TaskItem.vue')['default']
     TaskManager: typeof import('./src/components/TaskManager.vue')['default']

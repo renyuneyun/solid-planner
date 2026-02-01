@@ -13,9 +13,16 @@
 ## Mid priority -- can do these things in the meantime
 
 - [ ] Prefixes not exist in the Turtle file.
-- [ ] Provide testing suits
+  - Not supported by Soukai yet. Postpone.
+- [x] Provide testing suits
   - [x] Unit tests
-  - [ ] Other tests with mock components
+  - [x] Other tests with mock components
+- [x] Enable local storage and CRDT-based sync
+  - ✅ Implemented IndexedDB local storage
+  - ✅ Implemented sync service with last-write-wins conflict resolution
+  - ✅ Enabled Soukai history tracking and tombstones
+  - ✅ Added sync status indicators in UI
+  - See `docs/CRDT_SYNC.md` for details
 
 ## Low priority -- do these only after finishing the above
 
