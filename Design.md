@@ -51,6 +51,14 @@ You are free to choose most of the architectural and technical designs, but need
 - Don't over-engineer the solution, and keep the codebase maintainable.
 - Write tests where helpful or necessary
 
+## Tests
+
+Tests are located under `./tests/`. Where possible and appropriate, write tests.
+When making modifications, modify or update existing tests as well.
+
+Please also try to fix any TS / linter errors in the tests. You are allowed to not make it perfect, or snooze certain linter errors, as long as that fits the test scenario.
+E.g. sometimes, some variable can have type `any`, as long as there is a reason why the value should not have a pre-defined type (e.g. it is imported from a library which may subject to change, or can accept several types in the code which can often be extended or changed).
+
 ## Additional notes
 
 - I've written part of the code (with the help of AI coding agents). But it's not complete in many ways (e.g. not correctly connected to Solid Pods). Please let me know if you feel they are appropriate or not. (You may also want to refer to the logs of previous agents, under `agent-logs-old/`.)

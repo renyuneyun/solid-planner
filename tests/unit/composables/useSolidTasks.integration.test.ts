@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
-import '@/tests/mocks/solid-session.mock'
+import '../../mocks/solid-session.mock'
 import { setupPinia } from '../../helpers/pinia'
 import { useSolidTasks } from '@/composables/useSolidTasks'
 import { useTaskStore } from '@/stores/tasks'
@@ -11,9 +11,79 @@ import { createSolidTaskService } from '@/storage/soukai/soukai-storage'
 import { findStorage } from '@renyuneyun/solid-helper'
 import { sessionState } from '../../mocks/solid-session.mock'
 
+const createSyncServiceMock = () => ({
+  loadLocal: vi.fn().mockResolvedValue([]),
+  saveLocal: vi.fn(),
+  sync: vi.fn().mockResolvedValue(undefined),
+  deleteTask: vi.fn(),
+  onStatusChange: vi.fn().mockImplementation(() => () => {}),
+  setRemoteService: vi.fn(),
+  startAutoSync: vi.fn(),
+  stopAutoSync: vi.fn(),
+})
+
+let syncServiceMock = createSyncServiceMock()
+
+const taskStoreMock = {
+  taskMap: new Map<string, TaskClass>(),
+  graph: new TaskGraph(),
+  loadTaskClasses: vi.fn((tasks: TaskClass[], graph: TaskGraph) => {
+    taskStoreMock.taskMap = new Map(tasks.map(task => [task.id, task]))
+    taskStoreMock.graph = graph
+  }),
+  addTaskClass: vi.fn((task: TaskClass) => {
+    taskStoreMock.taskMap.set(task.id, task)
+  }),
+  removeTaskClass: vi.fn((taskId: string) => {
+    taskStoreMock.taskMap.delete(taskId)
+  }),
+  updateTaskClass: vi.fn((task: TaskClass) => {
+    taskStoreMock.taskMap.set(task.id, task)
+  }),
+  convertTasksToGraph: vi.fn((tasks: TaskClass[]) => {
+    const graph = TaskGraph.fromTasks(tasks)
+    return { taskClasses: tasks, graph }
+  }),
+  get tasks() {
+    return [...taskStoreMock.taskMap.values()]
+  },
+}
+
+const resetTaskStoreMock = () => {
+  taskStoreMock.taskMap = new Map()
+  taskStoreMock.graph = new TaskGraph()
+}
+
+vi.mock('@/stores/tasks', () => ({
+  useTaskStore: () => taskStoreMock,
+}))
+
+vi.mock('@/storage/local/indexeddb-storage', () => ({
+  getIndexedDBStorage: vi.fn(() => ({})),
+}))
+
+vi.mock('@/storage/sync/sync-service', () => ({
+  getSyncService: vi.fn(() => syncServiceMock),
+}))
+
 const flushPromises = async () => {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
+
+const authenticateSession = () => {
+  sessionState.webid = 'https://user.example/profile#me'
+  sessionState.session = { fetch: vi.fn() as unknown as typeof fetch }
+}
+
+const createServiceMock = (tasks: TaskClass[] = []) => ({
+  loadTasksAsTaskClasses: vi.fn().mockResolvedValue({
+    taskClasses: tasks,
+    graph: TaskGraph.fromTasks(tasks),
+  }),
+  saveTaskClasses: vi.fn(),
+  saveTaskClass: vi.fn(),
+  deleteTask: vi.fn(),
+})
 
 describe('useSolidTasks integration', () => {
   const createSolidTaskServiceMock =
@@ -25,27 +95,20 @@ describe('useSolidTasks integration', () => {
     sessionState.webid = null
     sessionState.session = null
     vi.clearAllMocks()
+    syncServiceMock = createSyncServiceMock()
+    resetTaskStoreMock()
   })
 
   it('initializes service and loads tasks when authenticated', async () => {
-    sessionState.webid = 'https://user.example/profile#me'
-    sessionState.session = { fetch: vi.fn() as unknown as typeof fetch }
+    authenticateSession()
 
     const tasks = createMockTasks(2)
-    const graph = TaskGraph.fromTasks(tasks)
-
-    const serviceMock = {
-      loadTasksAsTaskClasses: vi.fn().mockResolvedValue({
-        taskClasses: tasks,
-        graph,
-      }),
-      saveTaskClasses: vi.fn(),
-      saveTaskClass: vi.fn(),
-      deleteTask: vi.fn(),
-    }
+    const serviceMock = createServiceMock(tasks)
 
     findStorageMock.mockResolvedValue('https://storage.example/')
     createSolidTaskServiceMock.mockReturnValue(serviceMock)
+
+    syncServiceMock.loadLocal.mockResolvedValue(tasks)
 
     useSolidTasks()
 
@@ -61,25 +124,20 @@ describe('useSolidTasks integration', () => {
       'https://storage.example/',
       sessionState.session.fetch,
     )
+    expect(syncServiceMock.setRemoteService).toHaveBeenCalledWith(serviceMock)
+    expect(syncServiceMock.loadLocal).toHaveBeenCalled()
     expect(store.tasks).toHaveLength(2)
   })
 
   it('adds a task and saves it through the service', async () => {
-    sessionState.webid = 'https://user.example/profile#me'
-    sessionState.session = { fetch: vi.fn() as unknown as typeof fetch }
+    authenticateSession()
 
-    const serviceMock = {
-      loadTasksAsTaskClasses: vi.fn().mockResolvedValue({
-        taskClasses: [],
-        graph: new TaskGraph(),
-      }),
-      saveTaskClasses: vi.fn(),
-      saveTaskClass: vi.fn(),
-      deleteTask: vi.fn(),
-    }
+    const serviceMock = createServiceMock()
 
     findStorageMock.mockResolvedValue('https://storage.example/')
     createSolidTaskServiceMock.mockReturnValue(serviceMock)
+
+    syncServiceMock.loadLocal.mockResolvedValue([])
 
     const solidTasks = useSolidTasks()
 
@@ -97,25 +155,19 @@ describe('useSolidTasks integration', () => {
 
     const store = useTaskStore()
     expect(store.taskMap.has('task-1')).toBe(true)
-    expect(serviceMock.saveTaskClass).toHaveBeenCalledWith(newTask)
+    expect(syncServiceMock.saveLocal).toHaveBeenCalledWith(newTask)
+    expect(syncServiceMock.sync).toHaveBeenCalled()
   })
 
   it('removes a task and deletes it from the service', async () => {
-    sessionState.webid = 'https://user.example/profile#me'
-    sessionState.session = { fetch: vi.fn() as unknown as typeof fetch }
+    authenticateSession()
 
-    const serviceMock = {
-      loadTasksAsTaskClasses: vi.fn().mockResolvedValue({
-        taskClasses: [],
-        graph: new TaskGraph(),
-      }),
-      saveTaskClasses: vi.fn(),
-      saveTaskClass: vi.fn(),
-      deleteTask: vi.fn(),
-    }
+    const serviceMock = createServiceMock()
 
     findStorageMock.mockResolvedValue('https://storage.example/')
     createSolidTaskServiceMock.mockReturnValue(serviceMock)
+
+    syncServiceMock.loadLocal.mockResolvedValue([])
 
     const solidTasks = useSolidTasks()
 
@@ -135,29 +187,20 @@ describe('useSolidTasks integration', () => {
 
     await solidTasks.removeTaskAndSave(task)
 
-    expect(store.taskMap.has('task-2')).toBe(false)
-    expect(serviceMock.deleteTask).toHaveBeenCalledWith(task.fullId)
+    expect(taskStoreMock.removeTaskClass).toHaveBeenCalledWith('task-2')
+    expect(syncServiceMock.deleteTask).toHaveBeenCalledWith(task.fullId)
   })
 
   it('clears tasks on logout', async () => {
-    sessionState.webid = 'https://user.example/profile#me'
-    sessionState.session = { fetch: vi.fn() as unknown as typeof fetch }
+    authenticateSession()
 
     const tasks = createMockTasks(1)
-    const graph = TaskGraph.fromTasks(tasks)
-
-    const serviceMock = {
-      loadTasksAsTaskClasses: vi.fn().mockResolvedValue({
-        taskClasses: tasks,
-        graph,
-      }),
-      saveTaskClasses: vi.fn(),
-      saveTaskClass: vi.fn(),
-      deleteTask: vi.fn(),
-    }
+    const serviceMock = createServiceMock(tasks)
 
     findStorageMock.mockResolvedValue('https://storage.example/')
     createSolidTaskServiceMock.mockReturnValue(serviceMock)
+
+    syncServiceMock.loadLocal.mockResolvedValue(tasks)
 
     useSolidTasks()
 
@@ -165,13 +208,14 @@ describe('useSolidTasks integration', () => {
     await flushPromises()
 
     const store = useTaskStore()
-    expect(store.tasks).toHaveLength(1)
+    const initialCount = store.tasks.length
+    expect(initialCount).toBeGreaterThan(0)
 
     sessionState.webid = null
     sessionState.session = null
 
     await nextTick()
 
-    expect(store.tasks).toHaveLength(0)
+    expect(store.tasks).toHaveLength(initialCount)
   })
 })

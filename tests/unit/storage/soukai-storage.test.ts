@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import '@/tests/mocks/soukai-modules.mock'
+import '../../mocks/soukai-modules.mock'
 import { MockTask } from '../../mocks/task-model.mock'
 import { SolidTaskService } from '@/storage/soukai/soukai-storage'
 import Task from '@/storage/soukai/Task.model'
