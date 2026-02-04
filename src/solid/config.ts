@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 export const AUTH_CONFIG = {
   // Common Solid identity providers
   identityProviders: {

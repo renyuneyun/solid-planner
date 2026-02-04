@@ -5,8 +5,9 @@
 </template>
 
 <script setup lang="ts">
-import { DynamicDialogInstance } from 'primevue/dynamicdialogoptions'
-import { inject, onMounted, ref, Ref } from 'vue'
+import type { DynamicDialogInstance } from 'primevue/dynamicdialogoptions'
+import { inject, onMounted, ref } from 'vue'
+import type { Ref } from 'vue'
 
 const dialogRef = inject<Ref<DynamicDialogInstance>>('dialogRef')
 
