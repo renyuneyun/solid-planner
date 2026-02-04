@@ -210,7 +210,7 @@ export function useLocalFirstTasks() {
   // Initialize on first use
   watch(
     isAuthenticated,
-    async (newAuth) => {
+    async newAuth => {
       if (newAuth) {
         // User logged in - load tasks with sync
         await loadTasks()

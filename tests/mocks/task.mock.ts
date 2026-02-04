@@ -3,9 +3,7 @@ import { TaskClass, Status } from '@/models/TaskClass'
 /**
  * Factory function to create test tasks with default values
  */
-export function createMockTask(
-  overrides: Partial<TaskClass> = {},
-): TaskClass {
+export function createMockTask(overrides: Partial<TaskClass> = {}): TaskClass {
   return new TaskClass({
     id: `task-${Date.now()}-${Math.random()}`,
     name: 'Test Task',

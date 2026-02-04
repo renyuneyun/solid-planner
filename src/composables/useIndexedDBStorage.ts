@@ -21,14 +21,16 @@ export function useIndexedDBStorage() {
 
     try {
       const dbTasks = await localStore.getAllTasks()
-      
+
       // Convert database format to TaskClass instances
       return dbTasks.map(dbTask => {
         const task = new TaskClass({
           id: extractIdFromUrl(dbTask.url),
           name: dbTask.title,
           description: dbTask.description,
-          addedDate: dbTask.dateCreated ? new Date(dbTask.dateCreated) : new Date(),
+          addedDate: dbTask.dateCreated
+            ? new Date(dbTask.dateCreated)
+            : new Date(),
           startDate: dbTask.startDate ? new Date(dbTask.startDate) : undefined,
           endDate: dbTask.endDate ? new Date(dbTask.endDate) : undefined,
           status: dbTask.status as Status | undefined,

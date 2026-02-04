@@ -106,9 +106,7 @@ describe('useIndexedDBStorage', () => {
   })
 
   it('handles errors when loading', async () => {
-    indexedDBMock.getAllTasks.mockRejectedValue(
-      new Error('Database error'),
-    )
+    indexedDBMock.getAllTasks.mockRejectedValue(new Error('Database error'))
 
     const storage = useIndexedDBStorage()
 
@@ -117,9 +115,7 @@ describe('useIndexedDBStorage', () => {
   })
 
   it('handles errors when saving', async () => {
-    indexedDBMock.saveTask.mockRejectedValue(
-      new Error('Save failed'),
-    )
+    indexedDBMock.saveTask.mockRejectedValue(new Error('Save failed'))
 
     const storage = useIndexedDBStorage()
 

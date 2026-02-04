@@ -14,7 +14,7 @@ describe('datetime utilities', () => {
   })
 
   describe('isToday', () => {
-    it('should return true for today\'s date', () => {
+    it("should return true for today's date", () => {
       const today = new Date('2024-01-15T12:00:00')
       vi.setSystemTime(today)
 
