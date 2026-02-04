@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { nextTick } from 'vue'
 import '../../mocks/solid-session.mock'
 import { setupPinia } from '../../helpers/pinia'
-import { useSolidTasks } from '@/composables/useSolidTasks'
+import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
+import { useSolidStorage } from '@/composables/useSolidStorage'
+import { useIndexedDBStorage } from '@/composables/useIndexedDBStorage'
 import { useTaskStore } from '@/stores/tasks'
 import { TaskGraph } from '@/models/TaskGraph'
 import { TaskClass, Status } from '@/models/TaskClass'
@@ -85,7 +87,7 @@ const createServiceMock = (tasks: TaskClass[] = []) => ({
   deleteTask: vi.fn(),
 })
 
-describe('useSolidTasks integration', () => {
+describe('useLocalFirstTasks', () => {
   const createSolidTaskServiceMock =
     createSolidTaskService as unknown as ReturnType<typeof vi.fn>
   const findStorageMock = findStorage as unknown as ReturnType<typeof vi.fn>
@@ -110,7 +112,7 @@ describe('useSolidTasks integration', () => {
 
     syncServiceMock.loadLocal.mockResolvedValue(tasks)
 
-    useSolidTasks()
+    useLocalFirstTasks()
 
     await nextTick()
     await flushPromises()
@@ -139,7 +141,7 @@ describe('useSolidTasks integration', () => {
 
     syncServiceMock.loadLocal.mockResolvedValue([])
 
-    const solidTasks = useSolidTasks()
+    const localFirst = useLocalFirstTasks()
 
     await nextTick()
     await flushPromises()
@@ -151,7 +153,7 @@ describe('useSolidTasks integration', () => {
       status: Status.IN_PROGRESS,
     })
 
-    await solidTasks.addTaskAndSave(newTask)
+    await localFirst.addTask(newTask)
 
     const store = useTaskStore()
     expect(store.taskMap.has('task-1')).toBe(true)
@@ -169,7 +171,7 @@ describe('useSolidTasks integration', () => {
 
     syncServiceMock.loadLocal.mockResolvedValue([])
 
-    const solidTasks = useSolidTasks()
+    const localFirst = useLocalFirstTasks()
 
     await nextTick()
     await flushPromises()
@@ -185,37 +187,24 @@ describe('useSolidTasks integration', () => {
 
     store.addTaskClass(task)
 
-    await solidTasks.removeTaskAndSave(task)
+    await localFirst.removeTask(task)
 
     expect(taskStoreMock.removeTaskClass).toHaveBeenCalledWith('task-2')
     expect(syncServiceMock.deleteTask).toHaveBeenCalledWith(task.fullId)
   })
 
-  it('clears tasks on logout', async () => {
-    authenticateSession()
-
+  it('loads tasks on initialization without authentication', async () => {
     const tasks = createMockTasks(1)
-    const serviceMock = createServiceMock(tasks)
-
-    findStorageMock.mockResolvedValue('https://storage.example/')
-    createSolidTaskServiceMock.mockReturnValue(serviceMock)
 
     syncServiceMock.loadLocal.mockResolvedValue(tasks)
 
-    useSolidTasks()
+    useLocalFirstTasks()
 
     await nextTick()
     await flushPromises()
 
     const store = useTaskStore()
-    const initialCount = store.tasks.length
-    expect(initialCount).toBeGreaterThan(0)
-
-    sessionState.webid = null
-    sessionState.session = null
-
-    await nextTick()
-
-    expect(store.tasks).toHaveLength(initialCount)
+    expect(store.tasks).toHaveLength(1)
+    expect(syncServiceMock.loadLocal).toHaveBeenCalled()
   })
 })
