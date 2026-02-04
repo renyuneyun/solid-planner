@@ -1,6 +1,6 @@
 ## High priority -- do these things first, whenever possible
 
-- [ ] Change interface -- for automatic-local-first-with-sync, don't call it useSolidTasks
+- [x] Change interface -- for automatic-local-first-with-sync, don't call it useSolidTasks
   - Instead, maybe call it use local-first tasks
   - Maybe have useSolidTasks as interface to be called by it; similarly, for local tasks (maybe call it indexed db task in fact? we may want alternative local storage, if it's not browser, right? e.g., android?)
   - This may provide better maintainability, if we want to expand the storage backend
