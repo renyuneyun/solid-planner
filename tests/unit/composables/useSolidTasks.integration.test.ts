@@ -122,7 +122,7 @@ describe('useSolidTasks integration', () => {
     )
     expect(createSolidTaskServiceMock).toHaveBeenCalledWith(
       'https://storage.example/',
-      sessionState.session.fetch,
+      sessionState.session!.fetch,
     )
     expect(syncServiceMock.setRemoteService).toHaveBeenCalledWith(serviceMock)
     expect(syncServiceMock.loadLocal).toHaveBeenCalled()

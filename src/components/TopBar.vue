@@ -21,9 +21,9 @@ import BrandLogo from './TopBar/BrandLogo.vue'
 import Navigation from './TopBar/Navigation.vue'
 import UserSection from './TopBar/UserSection.vue'
 import SyncStatus from './SyncStatus.vue'
-import { useSolidTasks } from '@/composables/useSolidTasks'
+import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 
-const { syncStatus, isAuthenticated, manualSync } = useSolidTasks()
+const { syncStatus, isAuthenticated, manualSync } = useLocalFirstTasks()
 
 async function handleManualSync() {
   try {

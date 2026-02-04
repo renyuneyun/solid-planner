@@ -137,7 +137,7 @@ import draggable from 'vuedraggable'
 import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
 import { useTaskStore } from '@/stores/tasks'
-import { useSolidTasks } from '@/composables/useSolidTasks'
+import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import {
   getChildTasks,
   buildTaskHierarchy,
@@ -148,10 +148,9 @@ import {
 // Use confirm dialog
 const confirm = useConfirm()
 
-// Use Solid tasks composable for Pod integration
+// Use local-first tasks composable for storage and sync
 const taskStore = useTaskStore()
-const { saveToPod, addTaskAndSave, updateTaskAndSave, removeTaskAndSave } =
-  useSolidTasks()
+const { saveTasks, addTask, updateTask, removeTask } = useLocalFirstTasks()
 
 // Compute task hierarchy for rendering
 const tasks = computed(() => {
@@ -215,7 +214,7 @@ async function addQuickTask() {
 
   // Save to Pod (incremental)
   try {
-    await addTaskAndSave(task)
+    await addTask(task)
   } catch (err) {
     console.error('Failed to save task to Pod:', err)
   }
@@ -262,7 +261,7 @@ async function createNewTask() {
 
   // Save to Pod (incremental)
   try {
-    await addTaskAndSave(task)
+    await addTask(task)
   } catch (err) {
     console.error('Failed to save task to Pod:', err)
   }
@@ -301,8 +300,8 @@ async function addSubtask(subtaskId: string) {
 
   // Save both parent and child (incremental)
   try {
-    await updateTaskAndSave(selectedTask.value)
-    await updateTaskAndSave(taskToAdd)
+    await updateTask(selectedTask.value)
+    await updateTask(taskToAdd)
   } catch (error) {
     console.error('Failed to save subtask relationship to Pod:', error)
   }
@@ -320,8 +319,8 @@ const removeSubtask = async (subtaskId: string) => {
 
   // Save both parent and child (incremental)
   try {
-    await updateTaskAndSave(selectedTask.value)
-    await updateTaskAndSave(subtask)
+    await updateTask(selectedTask.value)
+    await updateTask(subtask)
   } catch (error) {
     console.error('Failed to save subtask removal to Pod:', error)
   }
@@ -339,7 +338,7 @@ async function deleteTask(taskId: string) {
     acceptClass: 'p-button-danger',
     accept: async () => {
       try {
-        await removeTaskAndSave(taskId)
+        await removeTask(taskId)
         // If deleted task is currently selected, clear selection
         if (selectedTask.value?.id === taskId) {
           selectedTask.value = null
@@ -366,7 +365,7 @@ function confirmDelete() {
 
       // Delete from Pod and local state
       try {
-        await removeTaskAndSave(taskToDelete.id)
+        await removeTask(taskToDelete.id)
         closeDrawer()
       } catch (err) {
         console.error('Failed to delete task:', err)
@@ -381,7 +380,7 @@ async function saveTask() {
 
   // Save to Pod (incremental)
   try {
-    await updateTaskAndSave(selectedTask.value)
+    await updateTask(selectedTask.value)
     // Optional: close drawer after successful save
     closeDrawer()
   } catch (err) {
@@ -397,7 +396,7 @@ async function onDragEnd() {
 
   // Save all affected tasks to Pod after drag operation
   try {
-    await saveToPod()
+    await saveTasks()
   } catch (error) {
     console.error('Failed to save drag operation to Pod:', error)
   }
@@ -438,7 +437,7 @@ function updateTaskRelationships() {
   updateRelationships(rootTasks, undefined)
 }
 
-// Tasks are automatically loaded by useSolidTasks composable
+// Tasks are automatically loaded by useLocalFirstTasks composable
 // when user logs in. The composable watches for authentication changes.
 </script>
 
