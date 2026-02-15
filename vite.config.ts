@@ -21,6 +21,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    minify: process.env.DEBUG ? false : 'terser',
+    sourcemap: process.env.DEBUG ? true : false,
   },
   server: {
     fs: {
