@@ -129,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { v4 as uuidv4 } from 'uuid'
 import { TaskClass, Status } from '@/models/TaskClass'
@@ -150,7 +150,35 @@ const confirm = useConfirm()
 
 // Use local-first tasks composable for storage and sync
 const taskStore = useTaskStore()
-const { saveTasks, addTask, updateTask, removeTask } = useLocalFirstTasks()
+const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
+
+onMounted(() => {
+  taskOperations.value = useLocalFirstTasks()
+})
+
+const saveTasks = async () => {
+  if (taskOperations.value) {
+    return taskOperations.value.saveTasks()
+  }
+}
+
+const addTask = async (task: TaskClass) => {
+  if (taskOperations.value) {
+    return taskOperations.value.addTask(task)
+  }
+}
+
+const updateTask = async (task: TaskClass) => {
+  if (taskOperations.value) {
+    return taskOperations.value.updateTask(task)
+  }
+}
+
+const removeTask = async (taskOrId: TaskClass | string) => {
+  if (taskOperations.value) {
+    return taskOperations.value.removeTask(taskOrId)
+  }
+}
 
 // Compute task hierarchy for rendering
 const tasks = computed(() => {

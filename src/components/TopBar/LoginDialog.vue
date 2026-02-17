@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import { useToast } from 'primevue/usetoast'
 import { AUTH_CONFIG } from '@/solid/config'
@@ -68,7 +68,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const sessionStore = useSessionStore()
+let sessionStore: ReturnType<typeof useSessionStore> | null = null
 const toast = useToast()
 
 // Local state
@@ -119,7 +119,7 @@ const handleLogin = async () => {
       return
     }
 
-    await sessionStore.login(
+    await sessionStore?.login(
       oidcIssuer,
       AUTH_CONFIG.redirectUrl,
       AUTH_CONFIG.clientName,
@@ -144,6 +144,11 @@ const handleLogin = async () => {
     isLoading.value = false
   }
 }
+
+// Initialize store on mount
+onMounted(() => {
+  sessionStore = useSessionStore()
+})
 </script>
 
 <style scoped>

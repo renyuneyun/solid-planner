@@ -2,7 +2,6 @@ import { ref, computed, watch } from 'vue'
 import { useTaskStore } from '@/stores/tasks'
 import { TaskClass } from '@/models/TaskClass'
 import { useIndexedDBStorage } from './useIndexedDBStorage'
-import { useSolidStorage } from './useSolidStorage'
 import { getIndexedDBStorage } from '@/storage/local/indexeddb-storage'
 import { getSyncService } from '@/storage/sync/sync-service'
 import type { SyncStatus } from '@/storage/sync/sync-service'
@@ -24,13 +23,56 @@ export function useLocalFirstTasks() {
 
   // Initialize storage services
   const localStorage = useIndexedDBStorage()
-  const solidStorage = useSolidStorage()
+
+  // FIXME: Monkey-patch to circumvent solid storage initialization issues in some environments
+  // Error example:
+  ///  Uncaught TypeError: undefined is not a non-null object
+  ///  requireContainerHandlerType ContainerHandlerType.js:3
+  ///  requireEntryHandlerContainer EntryHandlerContainer.js:8
+  ///  requireUtil Util.js:7
+  ///  <anonymous> EntryHandlerPredicate.js:6
+  ///  ContainerHandlerType.js:3:29
+  // This can happen in static sites (e.g. vite build)
+  // This is a temporary workaround until we can fix the underlying issues with solid-client initialization
+  // After fixing, we can remove this and directly import useSolidStorage at the top, and initialize it directly in this composable
+
+  // Defer loading useSolidStorage to avoid initializing solid-client on module load
+  const solidStorageRef = ref<any>(null)
+
+  const initSolidStoragePromise = (async () => {
+    try {
+      const { useSolidStorage } = await import('./useSolidStorage')
+      const ss = useSolidStorage()
+      solidStorageRef.value = ss
+      return ss
+    } catch (err) {
+      // Solid Pod integration failed - app will continue in local-first mode
+      // This is expected if solid-client library has initialization issues
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(
+          'Solid storage not available, using local-only mode:',
+          err,
+        )
+      }
+      // Set a fallback mock version
+      const mock = {
+        isAuthenticated: { value: false },
+        getService: () => null,
+      }
+      solidStorageRef.value = mock
+      return mock
+    }
+  })()
 
   // Create sync service (using raw IndexedDB storage for sync internals)
   const localStore = getIndexedDBStorage()
   const syncService = getSyncService(localStore)
 
-  const isAuthenticated = computed(() => solidStorage.isAuthenticated.value)
+  const isAuthenticated = computed(() => {
+    const ss = solidStorageRef.value
+    if (!ss) return false
+    return ss.isAuthenticated.value
+  })
   const isOnline = computed(() => syncStatus.value !== 'offline')
 
   // Subscribe to sync status changes
@@ -38,20 +80,24 @@ export function useLocalFirstTasks() {
     syncStatus.value = status
   })
 
-  // Watch for Solid service initialization and update sync service
-  watch(
-    () => solidStorage.getService(),
-    newService => {
-      syncService.setRemoteService(newService)
-      if (newService) {
-        // Start auto-sync every minute when authenticated
-        syncService.startAutoSync(60000)
-      } else {
-        syncService.stopAutoSync()
-      }
-    },
-    { immediate: true },
-  )
+  // Watch for Solid service initialization and update sync service (once loaded)
+  initSolidStoragePromise.then(ss => {
+    if (ss) {
+      watch(
+        () => ss.getService(),
+        newService => {
+          syncService.setRemoteService(newService)
+          if (newService) {
+            // Start auto-sync every minute when authenticated
+            syncService.startAutoSync(60000)
+          } else {
+            syncService.stopAutoSync()
+          }
+        },
+        { immediate: true },
+      )
+    }
+  })
 
   /**
    * Load tasks from local storage first, then sync with remote
@@ -71,7 +117,8 @@ export function useLocalFirstTasks() {
       }
 
       // Then sync with remote in background (if authenticated)
-      if (solidStorage.getService()) {
+      const ss = solidStorageRef.value
+      if (ss && ss.getService()) {
         // Wait for sync to complete
         await syncService.sync().catch(err => {
           console.error('Background sync failed:', err)
@@ -108,7 +155,8 @@ export function useLocalFirstTasks() {
       }
 
       // Then sync to remote in background
-      if (solidStorage.getService()) {
+      const ss = solidStorageRef.value
+      if (ss && ss.getService()) {
         syncService.sync().catch(err => {
           console.error('Background sync failed:', err)
           error.value = err instanceof Error ? err.message : 'Sync failed'
@@ -135,7 +183,8 @@ export function useLocalFirstTasks() {
       await syncService.saveLocal(taskClass)
 
       // Then sync to remote in background
-      if (solidStorage.getService()) {
+      const ss = solidStorageRef.value
+      if (ss && ss.getService()) {
         syncService.sync().catch(err => {
           console.error('Background sync failed:', err)
         })
@@ -159,7 +208,8 @@ export function useLocalFirstTasks() {
       await syncService.saveLocal(taskClass)
 
       // Then sync to remote in background
-      if (solidStorage.getService()) {
+      const ss = solidStorageRef.value
+      if (ss && ss.getService()) {
         syncService.sync().catch(err => {
           console.error('Background sync failed:', err)
         })
@@ -244,6 +294,6 @@ export function useLocalFirstTasks() {
 
     // Storage composables (for advanced use)
     localStorage,
-    solidStorage,
+    solidStorage: solidStorageRef,
   }
 }
