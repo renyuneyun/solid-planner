@@ -1,16 +1,12 @@
 <template>
   <div class="user-section">
     <!-- When user is logged in -->
-    <div v-if="sessionStore.isLoggedIn" class="user-info">
+    <div v-if="sessionStore?.isLoggedIn" class="user-info">
       <div class="user-details">
-        <Avatar
-          :label="userInitials"
-          class="user-avatar"
-          shape="circle"
-        />
+        <Avatar :label="userInitials" class="user-avatar" shape="circle" />
         <div class="user-text">
           <span class="user-name">{{ displayName }}</span>
-          <span class="user-webid">{{ sessionStore.webid }}</span>
+          <span class="user-webid">{{ sessionStore?.webid }}</span>
         </div>
       </div>
       <Button
@@ -40,14 +36,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import { useToast } from 'primevue/usetoast'
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
 import LoginDialog from './LoginDialog.vue'
 
-const sessionStore = useSessionStore()
+let sessionStore: ReturnType<typeof useSessionStore> | null = null
 const toast = useToast()
 
 // Local state
@@ -55,13 +51,15 @@ const showLoginDialog = ref(false)
 
 // User display information
 const displayName = computed(() => {
-  if (!sessionStore.webid) return ''
+  if (!sessionStore?.webid) return ''
 
   // Extract a readable name from WebID
   try {
-    const url = new URL(sessionStore.webid)
+    const url = new URL(sessionStore?.webid || '')
     const pathname = url.pathname
-    const username = pathname.split('/').find(segment => segment && segment !== 'profile') || 'User'
+    const username =
+      pathname.split('/').find(segment => segment && segment !== 'profile') ||
+      'User'
     return username.charAt(0).toUpperCase() + username.slice(1)
   } catch {
     return 'User'
@@ -80,22 +78,27 @@ const handleLoginClick = () => {
 
 const handleLogout = async () => {
   try {
-    await sessionStore.logout()
+    await sessionStore?.logout()
     toast.add({
       severity: 'info',
       summary: 'Logged Out',
       detail: 'You have been logged out successfully',
-      life: 3000
+      life: 3000,
     })
   } catch (e: any) {
     toast.add({
       severity: 'error',
       summary: 'Logout Failed',
       detail: `Logout failed: ${e.message}`,
-      life: 5000
+      life: 5000,
     })
   }
 }
+
+// Initialize store on mount
+onMounted(() => {
+  sessionStore = useSessionStore()
+})
 </script>
 
 <style scoped>

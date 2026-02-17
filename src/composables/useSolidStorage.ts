@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import {
   createSolidTaskService,
@@ -12,20 +12,20 @@ import { findStorage } from '@renyuneyun/solid-helper'
  * Handles authentication and remote storage operations
  */
 export function useSolidStorage() {
-  const sessionStore = useSessionStore()
+  let sessionStore: ReturnType<typeof useSessionStore> | null = null
 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const solidService = ref<SolidTaskService | null>(null)
 
-  const isAuthenticated = computed(() => !!sessionStore.webid)
+  const isAuthenticated = computed(() => !!sessionStore?.webid)
   const hasService = computed(() => !!solidService.value)
 
   /**
    * Initialize the Solid service when user logs in
    */
   async function initializeService() {
-    if (!sessionStore.webid || !sessionStore.session?.fetch) {
+    if (!sessionStore?.webid || !sessionStore?.session?.fetch) {
       solidService.value = null
       return
     }
@@ -140,9 +140,14 @@ export function useSolidStorage() {
     return solidService.value
   }
 
+  // Initialize store on mount
+  onMounted(() => {
+    sessionStore = useSessionStore()
+  })
+
   // Watch for authentication changes and initialize service
   watch(
-    () => sessionStore.webid,
+    () => sessionStore?.webid,
     async newWebId => {
       if (newWebId) {
         await initializeService()

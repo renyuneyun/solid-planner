@@ -18,6 +18,8 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+    dedupe: ['pinia'], // Ensure single instance of Pinia across the app to avoid store duplication issues
+    // Example error:  TypeError: can't access property "_s", pinia is undefined
   },
   build: {
     outDir: 'dist',
