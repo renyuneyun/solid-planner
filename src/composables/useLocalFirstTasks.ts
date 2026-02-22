@@ -32,11 +32,10 @@ export function useLocalFirstTasks() {
   ///  requireUtil Util.js:7
   ///  <anonymous> EntryHandlerPredicate.js:6
   ///  ContainerHandlerType.js:3:29
-  // This can happen in static sites (e.g. vite build)
-  // This is a temporary workaround until we can fix the underlying issues with solid-client initialization
-  // After fixing, we can remove this and directly import useSolidStorage at the top, and initialize it directly in this composable
+  // This can happen in static sites (e.g. vite build), when using this file (which imports `useSolidStorage.ts`, which in turn imports `solid-helper-vue`) at the top level; while using `useSolidStorage.ts` directly (i.e. not through this file's second-order wrapping) won't cause this issue.
+  // By deferring the import and initialization of `useSolidStorage` until it's actually needed (e.g. when the component using this composable is mounted), we can avoid triggering the problematic code during module load, allowing the app to function in local-first mode even though the issue exists. This is a temporary workaround until we can fix the underlying issues, maybe with solid-client or maybe with solid-helper-vue. After fixing, we can remove this and directly import useSolidStorage at the top, and initialize it directly in this composable.
 
-  // Defer loading useSolidStorage to avoid initializing solid-client on module load
+  // Defer loading useSolidStorage to avoid initializing on module load
   const solidStorageRef = ref<any>(null)
 
   const initSolidStoragePromise = (async () => {
