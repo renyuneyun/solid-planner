@@ -9,8 +9,12 @@
           @keydown.enter="addQuickTask"
           class="w-full"
         />
-        <Button icon="pi pi-plus" @click="addQuickTask" />
-        <Button icon="pi pi-bars" @click="openNewTaskDrawer" />
+        <Button icon="pi pi-plus" title="Add task" @click="addQuickTask" />
+        <Button
+          icon="pi pi-bars"
+          title="Open task drawer"
+          @click="openNewTaskDrawer"
+        />
       </div>
     </div>
 
@@ -67,6 +71,7 @@
         <Button
           icon="pi pi-times"
           text
+          title="Close"
           @click="closeDrawer"
           class="close-btn"
         />
@@ -84,12 +89,18 @@
         >
           <template #actions>
             <div class="actions">
-              <Button label="Save" icon="pi pi-check" @click="saveTask" />
+              <Button
+                label="Save"
+                icon="pi pi-check"
+                title="Save task"
+                @click="saveTask"
+              />
               <Button
                 label="Delete"
                 icon="pi pi-trash"
                 severity="danger"
                 text
+                title="Delete task"
                 @click="confirmDelete"
               />
             </div>
@@ -110,11 +121,13 @@
                 label="Cancel"
                 icon="pi pi-times"
                 text
+                title="Cancel"
                 @click="closeDrawer"
               />
               <Button
                 label="Create"
                 icon="pi pi-check"
+                title="Create task"
                 @click="createNewTask"
               />
             </div>
@@ -142,7 +155,6 @@ import {
   getChildTasks,
   buildTaskHierarchy,
   getAllDescendantTasks,
-  isAncestor,
 } from '@/models/task-operations'
 
 // Use confirm dialog

@@ -23,9 +23,14 @@ interface NavigationItem {
 
 const navigationItems: NavigationItem[] = [
   {
-    name: 'Home',
+    name: 'Weekly Planner',
     path: '/',
-    icon: 'pi pi-home'
+    icon: 'pi pi-calendar'
+  },
+  {
+    name: 'All Tasks',
+    path: '/all-tasks',
+    icon: 'pi pi-list'
   },
   {
     name: 'About',

@@ -28,6 +28,7 @@ declare module 'vue' {
     SyncStatus: typeof import('./src/components/SyncStatus.vue')['default']
     TaskForm: typeof import('./src/components/TaskForm.vue')['default']
     TaskItem: typeof import('./src/components/TaskItem.vue')['default']
+    TaskItemWithContext: typeof import('./src/components/TaskItemWithContext.vue')['default']
     TaskManager: typeof import('./src/components/TaskManager.vue')['default']
     Textarea: typeof import('primevue/textarea')['default']
     TopBar: typeof import('./src/components/TopBar.vue')['default']
