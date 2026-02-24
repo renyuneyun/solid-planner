@@ -115,7 +115,14 @@
       </div>
 
       <div v-if="selectedTask">
-        <TaskForm v-model="selectedTask" class="drawer-form">
+        <TaskForm
+          v-model="selectedTask"
+          :showSubtasks="true"
+          :availableTasksForSubtask="availableTasksForSubtask"
+          @remove-subtask="removeSubtask"
+          @add-subtask="addSubtask"
+          class="drawer-form"
+        >
           <template #actions>
             <div class="actions">
               <Button
@@ -154,12 +161,17 @@ import TaskItemWithContext from '@/components/TaskItemWithContext.vue'
 import TaskForm from '@/components/TaskForm.vue'
 import type { TaskClass } from '@/models/TaskClass'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
+import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
 const selectedTask = ref<TaskClass | null>(null)
 
 const isDrawerOpen = computed(() => selectedTask.value !== null)
+
+// Use subtask management composable
+const { availableTasksForSubtask, addSubtask, removeSubtask } =
+  useSubtaskManagement(selectedTask, taskOperations)
 
 onMounted(() => {
   taskOperations.value = useLocalFirstTasks()
