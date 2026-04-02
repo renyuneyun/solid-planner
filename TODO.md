@@ -4,9 +4,9 @@
   - Instead, maybe call it use local-first tasks
   - Maybe have useSolidTasks as interface to be called by it; similarly, for local tasks (maybe call it indexed db task in fact? we may want alternative local storage, if it's not browser, right? e.g., android?)
   - This may provide better maintainability, if we want to expand the storage backend
-- [ ] Support the core feature -- automatic proprity and task filtering
-  - [ ] Automatic proprity calculation (for root tasks)
-  - [ ] Create a new page/tab for showing only relevant / important tasks (for the weekly planner); make it the default page/tab
+- [x] Support the core feature -- automatic proprity and task filtering
+  - [x] Automatic proprity calculation (for root tasks)
+  - [x] Create a new page/tab for showing only relevant / important tasks (for the weekly planner); make it the default page/tab
   - [ ] Support priority calculation considering subtasks as well
   - [ ] Put more urgent subtasks earlier (while parent tasks later? how to design the UI?)
 

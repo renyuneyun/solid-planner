@@ -5,8 +5,8 @@
       <Navigation />
       <div class="top-bar-right">
         <SyncStatus
-          v-if="isAuthenticated"
-          :status="syncStatus"
+          v-if="syncStatusData && syncStatusData.isAuthenticated"
+          :status="syncStatusData.syncStatus"
           :showSyncButton="true"
           @sync="handleManualSync"
         />
@@ -17,17 +17,32 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import BrandLogo from './TopBar/BrandLogo.vue'
 import Navigation from './TopBar/Navigation.vue'
 import UserSection from './TopBar/UserSection.vue'
 import SyncStatus from './SyncStatus.vue'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 
-const { syncStatus, isAuthenticated, manualSync } = useLocalFirstTasks()
+const syncStatusData = ref<{
+  syncStatus: any
+  isAuthenticated: any
+  manualSync: () => Promise<void>
+} | null>(null)
+
+onMounted(() => {
+  const data = useLocalFirstTasks()
+  syncStatusData.value = {
+    syncStatus: data.syncStatus,
+    isAuthenticated: data.isAuthenticated,
+    manualSync: data.manualSync,
+  }
+})
 
 async function handleManualSync() {
+  if (!syncStatusData.value) return
   try {
-    await manualSync()
+    await syncStatusData.value.manualSync()
   } catch (err) {
     console.error('Manual sync failed:', err)
   }

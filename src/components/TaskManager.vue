@@ -9,8 +9,12 @@
           @keydown.enter="addQuickTask"
           class="w-full"
         />
-        <Button icon="pi pi-plus" @click="addQuickTask" />
-        <Button icon="pi pi-bars" @click="openNewTaskDrawer" />
+        <Button icon="pi pi-plus" title="Add task" @click="addQuickTask" />
+        <Button
+          icon="pi pi-bars"
+          title="Open task drawer"
+          @click="openNewTaskDrawer"
+        />
       </div>
     </div>
 
@@ -67,6 +71,7 @@
         <Button
           icon="pi pi-times"
           text
+          title="Close"
           @click="closeDrawer"
           class="close-btn"
         />
@@ -84,12 +89,18 @@
         >
           <template #actions>
             <div class="actions">
-              <Button label="Save" icon="pi pi-check" @click="saveTask" />
+              <Button
+                label="Save"
+                icon="pi pi-check"
+                title="Save task"
+                @click="saveTask"
+              />
               <Button
                 label="Delete"
                 icon="pi pi-trash"
                 severity="danger"
                 text
+                title="Delete task"
                 @click="confirmDelete"
               />
             </div>
@@ -110,11 +121,13 @@
                 label="Cancel"
                 icon="pi pi-times"
                 text
+                title="Cancel"
                 @click="closeDrawer"
               />
               <Button
                 label="Create"
                 icon="pi pi-check"
+                title="Create task"
                 @click="createNewTask"
               />
             </div>
@@ -129,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useConfirm } from 'primevue/useconfirm'
 import { v4 as uuidv4 } from 'uuid'
 import { TaskClass, Status } from '@/models/TaskClass'
@@ -138,19 +151,43 @@ import TaskItem from './TaskItem.vue'
 import TaskForm from './TaskForm.vue'
 import { useTaskStore } from '@/stores/tasks'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
-import {
-  getChildTasks,
-  buildTaskHierarchy,
-  getAllDescendantTasks,
-  isAncestor,
-} from '@/models/task-operations'
+import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
+import { getChildTasks, buildTaskHierarchy } from '@/models/task-operations'
 
 // Use confirm dialog
 const confirm = useConfirm()
 
 // Use local-first tasks composable for storage and sync
 const taskStore = useTaskStore()
-const { saveTasks, addTask, updateTask, removeTask } = useLocalFirstTasks()
+const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
+
+onMounted(() => {
+  taskOperations.value = useLocalFirstTasks()
+})
+
+const saveTasks = async () => {
+  if (taskOperations.value) {
+    return taskOperations.value.saveTasks()
+  }
+}
+
+const addTask = async (task: TaskClass) => {
+  if (taskOperations.value) {
+    return taskOperations.value.addTask(task)
+  }
+}
+
+const updateTask = async (task: TaskClass) => {
+  if (taskOperations.value) {
+    return taskOperations.value.updateTask(task)
+  }
+}
+
+const removeTask = async (taskOrId: TaskClass | string) => {
+  if (taskOperations.value) {
+    return taskOperations.value.removeTask(taskOrId)
+  }
+}
 
 // Compute task hierarchy for rendering
 const tasks = computed(() => {
@@ -172,23 +209,9 @@ const isDrawerOpen = computed(
     drawerMode.value === 'new',
 )
 
-// Calculate available task list for adding as subtasks
-// Avoid circular dependencies, need to exclude current task and all its descendant tasks
-const availableTasksForSubtask = computed(() => {
-  if (!selectedTask.value) return []
-
-  // Get all descendant task IDs under current task (including current task)
-  const excludeIds = new Set<string>([selectedTask.value.id])
-
-  // Add all descendants
-  const descendants = getAllDescendantTasks(selectedTask.value.id, taskStore)
-  for (const desc of descendants) {
-    excludeIds.add(desc.id)
-  }
-
-  // Get all tasks and filter out excluded ones
-  return taskStore.tasks.filter(task => !excludeIds.has(task.id))
-})
+// Use subtask management composable
+const { availableTasksForSubtask, addSubtask, removeSubtask } =
+  useSubtaskManagement(selectedTask, taskOperations)
 
 // New task form
 const newTask = reactive<Partial<TaskClass>>({
@@ -279,50 +302,6 @@ function toggleTaskExpanded(taskId: string) {
     expandedTaskIds.value.delete(taskId)
   } else {
     expandedTaskIds.value.add(taskId)
-  }
-}
-
-// Find task by specific ID
-function findTaskById(taskId: string): TaskClass | null {
-  return taskStore.taskMap.get(taskId) || null
-}
-
-// Add subtask
-async function addSubtask(subtaskId: string) {
-  if (!selectedTask.value) return
-
-  // Find the task to add as subtask
-  const taskToAdd = taskStore.taskMap.get(subtaskId)
-  if (!taskToAdd) return
-
-  // Move task to be a child of selected task (use store action to ensure consistency)
-  taskStore.moveTask(subtaskId, selectedTask.value.id)
-
-  // Save both parent and child (incremental)
-  try {
-    await updateTask(selectedTask.value)
-    await updateTask(taskToAdd)
-  } catch (error) {
-    console.error('Failed to save subtask relationship to Pod:', error)
-  }
-}
-
-// Remove subtask from parent task
-const removeSubtask = async (subtaskId: string) => {
-  if (!selectedTask.value) return
-
-  const subtask = taskStore.taskMap.get(subtaskId)
-  if (!subtask) return
-
-  // Remove the subtask from the currently selected task (parent)
-  taskStore.moveTask(subtaskId, undefined)
-
-  // Save both parent and child (incremental)
-  try {
-    await updateTask(selectedTask.value)
-    await updateTask(subtask)
-  } catch (error) {
-    console.error('Failed to save subtask removal to Pod:', error)
   }
 }
 
