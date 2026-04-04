@@ -52,11 +52,17 @@ export function useLocalFirstTasks() {
   // Watch for Solid service initialization and update sync service
   watch(
     () => solidStorage.getService(),
-    newService => {
+    async newService => {
       syncService.setRemoteService(newService)
       if (newService) {
         // Start auto-sync every minute when authenticated
         syncService.startAutoSync(60000)
+        // Trigger an immediate sync now that the service is ready.
+        // loadTasks() may have already run (before the service was available),
+        // so we explicitly sync and reload the store here.
+        await syncService.sync().catch(err => {
+          console.error('Initial sync after login failed:', err)
+        })
       } else {
         syncService.stopAutoSync()
       }
