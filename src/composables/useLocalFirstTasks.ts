@@ -71,36 +71,19 @@ export function useLocalFirstTasks() {
   )
 
   /**
-   * Load tasks from local storage first, then sync with remote
-   * This provides instant UI updates while syncing in the background
-   * Works both online and offline
+   * Load tasks from local storage.
+   * Syncing is handled separately by the service watcher and auto-sync;
+   * the onStatusChange callback reloads the store after each sync completes.
    */
   async function loadTasks() {
     isLoading.value = true
     error.value = null
 
     try {
-      // First, load from local storage (instant, works offline)
       const localTasks = await syncService.loadLocal()
       if (localTasks.length > 0) {
         const { graph } = taskStore.convertTasksToGraph(localTasks)
         taskStore.loadTaskClasses(localTasks, graph)
-      }
-
-      // Then sync with remote in background (if authenticated)
-      if (solidStorage.getService()) {
-        // Wait for sync to complete
-        await syncService.sync().catch(err => {
-          console.error('Background sync failed:', err)
-          error.value = err instanceof Error ? err.message : 'Sync failed'
-        })
-
-        // Reload from local storage after sync
-        const updatedTasks = await syncService.loadLocal()
-        if (updatedTasks.length > 0) {
-          const { graph } = taskStore.convertTasksToGraph(updatedTasks)
-          taskStore.loadTaskClasses(updatedTasks, graph)
-        }
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load tasks'
