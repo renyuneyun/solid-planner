@@ -38,6 +38,7 @@ export class SyncService {
   constructor(
     private localStore: IndexedDBTaskStorage,
     private remoteService: RemoteTaskService | null,
+    private conflictResolution: ConflictResolution = 'local-wins',
   ) {}
 
   /**
@@ -180,11 +181,18 @@ export class SyncService {
             await this.localStore.deleteTask(localTask.url)
           } else {
             // syncStatus is 'pending': local modifications since last sync,
-            // but task was deleted remotely. Delete locally (remote wins).
-            console.log(
-              `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
-            )
-            await this.localStore.deleteTask(localTask.url)
+            // but task was deleted remotely. Apply conflict resolution strategy.
+            if (this.conflictResolution === 'local-wins') {
+              console.log(
+                `Task ${localTask.url} had pending changes and was deleted remotely, recreating remotely (local-wins)`,
+              )
+              await this.createRemoteTask(localTask)
+            } else {
+              console.log(
+                `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
+              )
+              await this.localStore.deleteTask(localTask.url)
+            }
           }
         }
       }
@@ -286,8 +294,11 @@ export class SyncService {
   }
 
   /**
-   * Merge local and remote task, then update appropriately
-   * Uses last-write-wins based on timestamps
+   * Merge local and remote task, then update appropriately.
+   * Strategy is controlled by this.conflictResolution:
+   * - 'local-wins': always push local to remote
+   * - 'remote-wins': always pull remote to local
+   * - 'last-write-wins': compare timestamps and apply the newer version
    */
   private async mergeAndUpdate(
     localTask: {
@@ -305,13 +316,7 @@ export class SyncService {
     },
     remoteTask: Task,
   ): Promise<void> {
-    // Compare timestamps for last-write-wins
-    const localTime = new Date(localTask.lastModified).getTime()
-    const remoteTime =
-      remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
-
-    if (localTime > remoteTime) {
-      // Local is newer: update remote
+    const pushLocalToRemote = async () => {
       remoteTask.title = localTask.title
       remoteTask.description = localTask.description
       remoteTask.priority = localTask.priority
@@ -325,9 +330,22 @@ export class SyncService {
       remoteTask.subTaskUrls = localTask.subTaskUrls
       remoteTask.parentTaskUrl = localTask.parentTaskUrl
       await remoteTask.save()
-    } else {
-      // Remote is newer or equal: update local
+    }
+
+    if (this.conflictResolution === 'local-wins') {
+      await pushLocalToRemote()
+    } else if (this.conflictResolution === 'remote-wins') {
       await this.syncRemoteToLocal(remoteTask)
+    } else {
+      // last-write-wins: compare timestamps
+      const localTime = new Date(localTask.lastModified).getTime()
+      const remoteTime =
+        remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
+      if (localTime > remoteTime) {
+        await pushLocalToRemote()
+      } else {
+        await this.syncRemoteToLocal(remoteTask)
+      }
     }
   }
 
@@ -428,9 +446,14 @@ let syncServiceInstance: SyncService | null = null
 export function getSyncService(
   localStore: IndexedDBTaskStorage,
   remoteService: RemoteTaskService | SolidTaskService | null = null,
+  conflictResolution: ConflictResolution = 'local-wins',
 ): SyncService {
   if (!syncServiceInstance) {
-    syncServiceInstance = new SyncService(localStore, remoteService)
+    syncServiceInstance = new SyncService(
+      localStore,
+      remoteService,
+      conflictResolution,
+    )
   }
   return syncServiceInstance
 }
