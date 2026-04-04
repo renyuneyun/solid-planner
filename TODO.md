@@ -4,21 +4,28 @@
   - Instead, maybe call it use local-first tasks
   - Maybe have useSolidTasks as interface to be called by it; similarly, for local tasks (maybe call it indexed db task in fact? we may want alternative local storage, if it's not browser, right? e.g., android?)
   - This may provide better maintainability, if we want to expand the storage backend
+- [x] When app loaded, and log-in, it won't automatically sync from Solid Pod, until a new task is added.
+- [x] After syncing, the page won't automatically reload and see the fetched tasks.
 - [x] Support the core feature -- automatic proprity and task filtering
   - [x] Automatic proprity calculation (for root tasks)
   - [x] Create a new page/tab for showing only relevant / important tasks (for the weekly planner); make it the default page/tab
   - [ ] Support priority calculation considering subtasks as well
   - [ ] Put more urgent subtasks earlier (while parent tasks later? how to design the UI?)
+- [ ] Export and import feature -- both for supporting migration, and for disaster recovery
+  - [ ] Also add automatic backup feature inside the Pod
 
 ## Mid priority -- can do these things in the meantime
 
+- [x] Fix vercel deployment -- maybe only needing vercel.json
 - [ ] Don't draw two "syncing" icons on the UI during sync
 - [ ] Check tests capture all important parts
-- [ ] Deploy as static page
+- [x] Deploy as static page
 - [ ] Have a static ClientId
 
 ## Low priority -- do these only after finishing the above
 
+- [ ] CORS error for static built site when fetching from Solid Pod?
+  - [ ] I've only seen this once. Not sure if this is actually a bug in Solid Planner or somewhere else.
 - [ ] Prefixes not exist in the Turtle file.
   - Not supported by Soukai yet. Postpone.
 - [ ] Optimize performance of update
