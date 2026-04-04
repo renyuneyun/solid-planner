@@ -33,9 +33,20 @@ export function useLocalFirstTasks() {
   const isAuthenticated = computed(() => solidStorage.isAuthenticated.value)
   const isOnline = computed(() => syncStatus.value !== 'offline')
 
-  // Subscribe to sync status changes
-  syncService.onStatusChange(status => {
+  // Subscribe to sync status changes; reload store from local after every successful sync
+  syncService.onStatusChange(async status => {
     syncStatus.value = status
+    if (status === 'idle' && solidStorage.getService()) {
+      try {
+        const updatedTasks = await syncService.loadLocal()
+        if (updatedTasks.length > 0) {
+          const { graph } = taskStore.convertTasksToGraph(updatedTasks)
+          taskStore.loadTaskClasses(updatedTasks, graph)
+        }
+      } catch (err) {
+        console.error('Failed to reload tasks after sync:', err)
+      }
+    }
   })
 
   // Watch for Solid service initialization and update sync service
