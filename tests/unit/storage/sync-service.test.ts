@@ -394,6 +394,47 @@ describe('SyncService', () => {
     })
   })
 
+  describe('sync - Phase 1: delete-conflict handling', () => {
+    it('should delete a synced task exactly once when it no longer exists remotely', async () => {
+      const localTask = {
+        url: 'https://pod.example/tasks/gone-task',
+        title: 'Gone Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'synced' as const,
+      }
+
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // not in remote
+
+      await syncService.sync()
+
+      // Should delete exactly once with the correct URL
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledTimes(1)
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/gone-task',
+      )
+    })
+
+    it('should delete a pending task once when it no longer exists remotely', async () => {
+      const localTask = {
+        url: 'https://pod.example/tasks/pending-task',
+        title: 'Pending Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'pending' as const,
+      }
+
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // not in remote
+
+      await syncService.sync()
+
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledTimes(1)
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/pending-task',
+      )
+    })
+  })
+
   describe('sync status management', () => {
     it('should update status to syncing during sync', async () => {
       const statusChanges: string[] = []

@@ -178,16 +178,14 @@ export class SyncService {
               `Task ${localTask.url} deleted remotely, removing locally`,
             )
             await this.localStore.deleteTask(localTask.url)
+          } else {
+            // syncStatus is 'pending': local modifications since last sync,
+            // but task was deleted remotely. Delete locally (remote wins).
+            console.log(
+              `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
+            )
+            await this.localStore.deleteTask(localTask.url)
           }
-          // If syncStatus is 'pending', it means local modifications since last sync
-          // In this case, we could either:
-          // - Recreate it remotely (local wins)
-          // - Delete it locally (remote wins)
-          // For now, we'll delete it locally to respect remote deletion
-          console.log(
-            `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
-          )
-          await this.localStore.deleteTask(localTask.url)
         }
       }
 
