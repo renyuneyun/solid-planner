@@ -98,12 +98,12 @@ export class SyncService {
   }
 
   /**
-   * Load all tasks from local storage
+   * Load all tasks from local storage, excluding soft-deleted tombstones
    */
   async loadLocal(): Promise<TaskClass[]> {
     const localTasks = await this.localStore.getAllTasks()
 
-    return localTasks.map(task => {
+    return localTasks.filter(task => task.syncStatus !== 'deleted').map(task => {
       const taskClass = new TaskClass({
         id: this.extractIdFromUrl(task.url),
         name: task.title,
@@ -156,8 +156,26 @@ export class SyncService {
       // Track URL changes for temp: tasks
       const urlMapping = new Map<string, string>()
 
-      // PHASE 1: Process local tasks (push to remote)
+      // PHASE 1a: Push pending deletions to remote, then clean up tombstones
       for (const localTask of localTasks) {
+        if (localTask.syncStatus !== 'deleted') continue
+        if (!localTask.url.startsWith('temp:')) {
+          try {
+            await this.remoteService!.deleteTask(localTask.url)
+          } catch (err) {
+            console.error(
+              `Failed to delete remote task ${localTask.url}, will retry on next sync:`,
+              err,
+            )
+            continue // keep the tombstone, retry next sync
+          }
+        }
+        await this.localStore.deleteTask(localTask.url)
+      }
+
+      // PHASE 1b: Process active local tasks (push to remote)
+      for (const localTask of localTasks) {
+        if (localTask.syncStatus === 'deleted') continue
         const isNewTask = localTask.url.startsWith('temp:')
         const remoteTask = remoteTaskMap.get(localTask.url)
 
@@ -417,19 +435,34 @@ export class SyncService {
   }
 
   /**
-   * Delete task from both local and remote
+   * Delete a task.
+   * For temp: tasks (never synced), deletes immediately.
+   * For synced tasks, marks as deleted locally (tombstone) and attempts
+   * immediate remote deletion; if offline the tombstone ensures the remote
+   * deletion is retried on the next sync.
    */
   async deleteTask(taskUrl: string): Promise<void> {
-    // Delete locally
-    await this.localStore.deleteTask(taskUrl)
+    if (taskUrl.startsWith('temp:')) {
+      // Never reached remote; safe to delete immediately
+      await this.localStore.deleteTask(taskUrl)
+      return
+    }
 
-    // Delete remotely if online
-    if (this.remoteService && !taskUrl.startsWith('temp:')) {
+    // Mark as deleted locally (tombstone)
+    await this.localStore.markAsDeleted(taskUrl)
+
+    // Attempt immediate remote deletion (optimistic)
+    if (this.remoteService) {
       try {
         await this.remoteService.deleteTask(taskUrl)
+        // Remote deletion succeeded: remove the local tombstone
+        await this.localStore.deleteTask(taskUrl)
       } catch (err) {
-        console.error('Failed to delete remote task:', err)
-        // Task will be deleted on next sync
+        console.error(
+          'Failed to delete remote task, tombstone kept for retry on next sync:',
+          err,
+        )
+        // Tombstone remains; Phase 1a of next sync will retry
       }
     }
   }
