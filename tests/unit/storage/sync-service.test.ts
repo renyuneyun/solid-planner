@@ -599,6 +599,7 @@ describe('SyncService', () => {
     })
 
     it('keeps tombstone when offline so next sync retries remote deletion', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       mockRemoteService.deleteTask.mockRejectedValue(new Error('Network error'))
 
       await syncService.deleteTask('https://pod.example/tasks/task-1')
@@ -608,6 +609,7 @@ describe('SyncService', () => {
       )
       // tombstone NOT cleaned up — deleteTask should not be called
       expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      consoleSpy.mockRestore()
     })
 
     it('keeps tombstone when no remote service is set', async () => {
@@ -644,6 +646,7 @@ describe('SyncService', () => {
     })
 
     it('keeps tombstone when remote deletion fails during sync', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const tombstone = {
         url: 'https://pod.example/tasks/deleted-task',
         title: 'Deleted Task',
@@ -657,6 +660,7 @@ describe('SyncService', () => {
       await syncService.sync()
 
       expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      consoleSpy.mockRestore()
     })
 
     it('skips tombstones when pulling remote tasks (prevents resurrection)', async () => {
