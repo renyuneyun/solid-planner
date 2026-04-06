@@ -19,7 +19,7 @@ interface TaskDB extends DBSchema {
       subTaskUrls?: string[]
       parentTaskUrl?: string
       lastModified: string // ISO string for sync
-      syncStatus: 'synced' | 'pending' | 'conflict'
+      syncStatus: 'synced' | 'pending' | 'conflict' | 'deleted'
     }
     indexes: {
       'by-lastModified': string
@@ -143,6 +143,19 @@ export class IndexedDBTaskStorage {
     const task = await this.db!.get('tasks', url)
     if (task) {
       task.syncStatus = 'synced'
+      await this.db!.put('tasks', task)
+    }
+  }
+
+  /**
+   * Mark task as deleted (tombstone) for deferred remote deletion during sync
+   */
+  async markAsDeleted(url: string): Promise<void> {
+    if (!this.db) await this.init()
+
+    const task = await this.db!.get('tasks', url)
+    if (task) {
+      task.syncStatus = 'deleted'
       await this.db!.put('tasks', task)
     }
   }

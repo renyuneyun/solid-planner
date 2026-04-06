@@ -40,6 +40,7 @@ describe('SyncService', () => {
     getAllTasks: ReturnType<typeof vi.fn>
     deleteTask: ReturnType<typeof vi.fn>
     markAsSynced: ReturnType<typeof vi.fn>
+    markAsDeleted: ReturnType<typeof vi.fn>
     setLastSyncTime: ReturnType<typeof vi.fn>
   }
 
@@ -59,6 +60,7 @@ describe('SyncService', () => {
       getAllTasks: vi.fn().mockResolvedValue([]),
       deleteTask: vi.fn(),
       markAsSynced: vi.fn(),
+      markAsDeleted: vi.fn(),
       setLastSyncTime: vi.fn(),
     }
 
@@ -391,6 +393,299 @@ describe('SyncService', () => {
       expect(tasks[0].childIds).toEqual(['child1', 'child2', 'child3'])
       // Should be a plain array, not a proxy
       expect(Array.isArray(tasks[0].childIds)).toBe(true)
+    })
+  })
+
+  describe('conflict resolution strategies', () => {
+    const makeLocalTask = (overrides = {}) => ({
+      url: 'https://pod.example/tasks/task-1',
+      title: 'Local Title',
+      description: 'local desc',
+      lastModified: '2026-01-20T10:00:00.000Z', // newer
+      syncStatus: 'pending' as const,
+      ...overrides,
+    })
+
+    const makeRemoteTask = () => {
+      const t = new Task()
+      t.url = 'https://pod.example/tasks/task-1'
+      t.title = 'Remote Title'
+      t.description = 'remote desc'
+      t.updatedAt = new Date('2026-01-15T10:00:00.000Z') // older
+      t.save = vi.fn().mockResolvedValue(undefined)
+      return t
+    }
+
+    it('local-wins: always pushes local to remote regardless of timestamps', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'local-wins',
+      )
+      const localTask = makeLocalTask()
+      const remoteTask = makeRemoteTask()
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
+
+      await service.sync()
+
+      expect(remoteTask.save).toHaveBeenCalled()
+      expect(remoteTask.title).toBe('Local Title')
+    })
+
+    it('remote-wins: always pulls remote to local regardless of timestamps', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'remote-wins',
+      )
+      const localTask = makeLocalTask()
+      const remoteTask = makeRemoteTask()
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
+
+      await service.sync()
+
+      expect(mockLocalStore.saveTask).toHaveBeenCalledWith(
+        expect.objectContaining({ url: 'https://pod.example/tasks/task-1', title: 'Remote Title' }),
+      )
+    })
+
+    it('last-write-wins: pushes local when local is newer', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'last-write-wins',
+      )
+      const localTask = makeLocalTask({ lastModified: '2026-01-20T10:00:00.000Z' })
+      const remoteTask = makeRemoteTask() // updatedAt 2026-01-15 (older)
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
+
+      await service.sync()
+
+      expect(remoteTask.save).toHaveBeenCalled()
+      expect(remoteTask.title).toBe('Local Title')
+    })
+
+    it('last-write-wins: pulls remote when remote is newer', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'last-write-wins',
+      )
+      const localTask = makeLocalTask({ lastModified: '2026-01-10T10:00:00.000Z' }) // older
+      const remoteTask = makeRemoteTask()
+      remoteTask.updatedAt = new Date('2026-01-20T10:00:00.000Z') // newer
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
+
+      await service.sync()
+
+      expect(mockLocalStore.saveTask).toHaveBeenCalledWith(
+        expect.objectContaining({ url: 'https://pod.example/tasks/task-1', title: 'Remote Title' }),
+      )
+    })
+
+    it('local-wins: recreates task remotely when pending local is deleted remotely', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'local-wins',
+      )
+      const localTask = makeLocalTask({ syncStatus: 'pending' as const })
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // deleted remotely
+
+      const mockCreatedTask = new Task()
+      mockCreatedTask.url = 'https://pod.example/tasks/new-id'
+      mockCreatedTask.save = vi.fn().mockResolvedValue(undefined)
+      vi.mocked(Task).mockReturnValue(mockCreatedTask)
+
+      await service.sync()
+
+      expect(mockCreatedTask.save).toHaveBeenCalled()
+      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+    })
+
+    it('remote-wins: deletes locally when pending local is deleted remotely', async () => {
+      const service = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'remote-wins',
+      )
+      const localTask = makeLocalTask({ syncStatus: 'pending' as const })
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // deleted remotely
+
+      await service.sync()
+
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(localTask.url)
+    })
+  })
+
+  describe('sync - Phase 1: delete-conflict handling', () => {
+    it('should delete a synced task exactly once when it no longer exists remotely', async () => {
+      const localTask = {
+        url: 'https://pod.example/tasks/gone-task',
+        title: 'Gone Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'synced' as const,
+      }
+
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // not in remote
+
+      await syncService.sync()
+
+      // Should delete exactly once with the correct URL
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledTimes(1)
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/gone-task',
+      )
+    })
+
+    it('should delete a pending task once when it no longer exists remotely (remote-wins)', async () => {
+      const remoteWinsService = new SyncService(
+        mockLocalStore as unknown as IndexedDBTaskStorage,
+        mockRemoteService,
+        'remote-wins',
+      )
+      const localTask = {
+        url: 'https://pod.example/tasks/pending-task',
+        title: 'Pending Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'pending' as const,
+      }
+
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockResolvedValue([]) // not in remote
+
+      await remoteWinsService.sync()
+
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledTimes(1)
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/pending-task',
+      )
+    })
+  })
+
+  describe('deleteTask - soft-delete tombstone', () => {
+    it('deletes temp: tasks immediately without tombstone', async () => {
+      await syncService.deleteTask('temp:abc123')
+
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith('temp:abc123')
+      expect(mockLocalStore.markAsDeleted).not.toHaveBeenCalled()
+    })
+
+    it('marks synced tasks as deleted (tombstone) before remote deletion', async () => {
+      mockRemoteService.deleteTask.mockResolvedValue(undefined)
+
+      await syncService.deleteTask('https://pod.example/tasks/task-1')
+
+      expect(mockLocalStore.markAsDeleted).toHaveBeenCalledWith(
+        'https://pod.example/tasks/task-1',
+      )
+    })
+
+    it('removes tombstone after successful remote deletion', async () => {
+      mockRemoteService.deleteTask.mockResolvedValue(undefined)
+
+      await syncService.deleteTask('https://pod.example/tasks/task-1')
+
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/task-1',
+      )
+    })
+
+    it('keeps tombstone when offline so next sync retries remote deletion', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockRemoteService.deleteTask.mockRejectedValue(new Error('Network error'))
+
+      await syncService.deleteTask('https://pod.example/tasks/task-1')
+
+      expect(mockLocalStore.markAsDeleted).toHaveBeenCalledWith(
+        'https://pod.example/tasks/task-1',
+      )
+      // tombstone NOT cleaned up — deleteTask should not be called
+      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      consoleSpy.mockRestore()
+    })
+
+    it('keeps tombstone when no remote service is set', async () => {
+      syncService.setRemoteService(null)
+
+      await syncService.deleteTask('https://pod.example/tasks/task-1')
+
+      expect(mockLocalStore.markAsDeleted).toHaveBeenCalledWith(
+        'https://pod.example/tasks/task-1',
+      )
+      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('sync - Phase 1a: tombstone flushing', () => {
+    it('deletes remote task and cleans up tombstone during sync', async () => {
+      const tombstone = {
+        url: 'https://pod.example/tasks/deleted-task',
+        title: 'Deleted Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'deleted' as const,
+      }
+      mockLocalStore.getAllTasks.mockResolvedValue([tombstone])
+      mockRemoteService.fetchTasks.mockResolvedValue([])
+
+      await syncService.sync()
+
+      expect(mockRemoteService.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/deleted-task',
+      )
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/deleted-task',
+      )
+    })
+
+    it('keeps tombstone when remote deletion fails during sync', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const tombstone = {
+        url: 'https://pod.example/tasks/deleted-task',
+        title: 'Deleted Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'deleted' as const,
+      }
+      mockLocalStore.getAllTasks.mockResolvedValue([tombstone])
+      mockRemoteService.fetchTasks.mockResolvedValue([])
+      mockRemoteService.deleteTask.mockRejectedValue(new Error('Network error'))
+
+      await syncService.sync()
+
+      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      consoleSpy.mockRestore()
+    })
+
+    it('skips tombstones when pulling remote tasks (prevents resurrection)', async () => {
+      const tombstone = {
+        url: 'https://pod.example/tasks/deleted-task',
+        title: 'Deleted Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'deleted' as const,
+      }
+      // remote deletion succeeds; remote also still returns the task (race condition)
+      const remoteTask = new Task()
+      remoteTask.url = 'https://pod.example/tasks/deleted-task'
+      remoteTask.title = 'Deleted Task'
+      remoteTask.save = vi.fn()
+
+      mockLocalStore.getAllTasks.mockResolvedValue([tombstone])
+      mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
+      mockRemoteService.deleteTask.mockResolvedValue(undefined)
+
+      await syncService.sync()
+
+      // Task was deleted remotely; should not be saved back to local
+      expect(mockLocalStore.saveTask).not.toHaveBeenCalledWith(
+        expect.objectContaining({ url: 'https://pod.example/tasks/deleted-task' }),
+      )
     })
   })
 

@@ -106,15 +106,18 @@ describe('useIndexedDBStorage', () => {
   })
 
   it('handles errors when loading', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     indexedDBMock.getAllTasks.mockRejectedValue(new Error('Database error'))
 
     const storage = useIndexedDBStorage()
 
     await expect(storage.loadLocal()).rejects.toThrow('Database error')
     expect(storage.error.value).toBe('Database error')
+    consoleSpy.mockRestore()
   })
 
   it('handles errors when saving', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     indexedDBMock.saveTask.mockRejectedValue(new Error('Save failed'))
 
     const storage = useIndexedDBStorage()
@@ -127,6 +130,7 @@ describe('useIndexedDBStorage', () => {
 
     await expect(storage.saveLocal(task)).rejects.toThrow('Save failed')
     expect(storage.error.value).toBe('Save failed')
+    consoleSpy.mockRestore()
   })
 
   it('converts IndexedDB results with parent/child relationships', async () => {

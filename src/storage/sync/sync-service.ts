@@ -38,6 +38,7 @@ export class SyncService {
   constructor(
     private localStore: IndexedDBTaskStorage,
     private remoteService: RemoteTaskService | null,
+    private conflictResolution: ConflictResolution = 'local-wins',
   ) {}
 
   /**
@@ -97,12 +98,12 @@ export class SyncService {
   }
 
   /**
-   * Load all tasks from local storage
+   * Load all tasks from local storage, excluding soft-deleted tombstones
    */
   async loadLocal(): Promise<TaskClass[]> {
     const localTasks = await this.localStore.getAllTasks()
 
-    return localTasks.map(task => {
+    return localTasks.filter(task => task.syncStatus !== 'deleted').map(task => {
       const taskClass = new TaskClass({
         id: this.extractIdFromUrl(task.url),
         name: task.title,
@@ -155,8 +156,26 @@ export class SyncService {
       // Track URL changes for temp: tasks
       const urlMapping = new Map<string, string>()
 
-      // PHASE 1: Process local tasks (push to remote)
+      // PHASE 1a: Push pending deletions to remote, then clean up tombstones
       for (const localTask of localTasks) {
+        if (localTask.syncStatus !== 'deleted') continue
+        if (!localTask.url.startsWith('temp:')) {
+          try {
+            await this.remoteService!.deleteTask(localTask.url)
+          } catch (err) {
+            console.error(
+              `Failed to delete remote task ${localTask.url}, will retry on next sync:`,
+              err,
+            )
+            continue // keep the tombstone, retry next sync
+          }
+        }
+        await this.localStore.deleteTask(localTask.url)
+      }
+
+      // PHASE 1b: Process active local tasks (push to remote)
+      for (const localTask of localTasks) {
+        if (localTask.syncStatus === 'deleted') continue
         const isNewTask = localTask.url.startsWith('temp:')
         const remoteTask = remoteTaskMap.get(localTask.url)
 
@@ -178,16 +197,21 @@ export class SyncService {
               `Task ${localTask.url} deleted remotely, removing locally`,
             )
             await this.localStore.deleteTask(localTask.url)
+          } else {
+            // syncStatus is 'pending': local modifications since last sync,
+            // but task was deleted remotely. Apply conflict resolution strategy.
+            if (this.conflictResolution === 'local-wins') {
+              console.log(
+                `Task ${localTask.url} had pending changes and was deleted remotely, recreating remotely (local-wins)`,
+              )
+              await this.createRemoteTask(localTask)
+            } else {
+              console.log(
+                `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
+              )
+              await this.localStore.deleteTask(localTask.url)
+            }
           }
-          // If syncStatus is 'pending', it means local modifications since last sync
-          // In this case, we could either:
-          // - Recreate it remotely (local wins)
-          // - Delete it locally (remote wins)
-          // For now, we'll delete it locally to respect remote deletion
-          console.log(
-            `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,
-          )
-          await this.localStore.deleteTask(localTask.url)
         }
       }
 
@@ -288,8 +312,11 @@ export class SyncService {
   }
 
   /**
-   * Merge local and remote task, then update appropriately
-   * Uses last-write-wins based on timestamps
+   * Merge local and remote task, then update appropriately.
+   * Strategy is controlled by this.conflictResolution:
+   * - 'local-wins': always push local to remote
+   * - 'remote-wins': always pull remote to local
+   * - 'last-write-wins': compare timestamps and apply the newer version
    */
   private async mergeAndUpdate(
     localTask: {
@@ -307,13 +334,7 @@ export class SyncService {
     },
     remoteTask: Task,
   ): Promise<void> {
-    // Compare timestamps for last-write-wins
-    const localTime = new Date(localTask.lastModified).getTime()
-    const remoteTime =
-      remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
-
-    if (localTime > remoteTime) {
-      // Local is newer: update remote
+    const pushLocalToRemote = async () => {
       remoteTask.title = localTask.title
       remoteTask.description = localTask.description
       remoteTask.priority = localTask.priority
@@ -327,9 +348,22 @@ export class SyncService {
       remoteTask.subTaskUrls = localTask.subTaskUrls
       remoteTask.parentTaskUrl = localTask.parentTaskUrl
       await remoteTask.save()
-    } else {
-      // Remote is newer or equal: update local
+    }
+
+    if (this.conflictResolution === 'local-wins') {
+      await pushLocalToRemote()
+    } else if (this.conflictResolution === 'remote-wins') {
       await this.syncRemoteToLocal(remoteTask)
+    } else {
+      // last-write-wins: compare timestamps
+      const localTime = new Date(localTask.lastModified).getTime()
+      const remoteTime =
+        remoteTask.updatedAt?.getTime() || remoteTask.createdAt?.getTime() || 0
+      if (localTime > remoteTime) {
+        await pushLocalToRemote()
+      } else {
+        await this.syncRemoteToLocal(remoteTask)
+      }
     }
   }
 
@@ -401,19 +435,34 @@ export class SyncService {
   }
 
   /**
-   * Delete task from both local and remote
+   * Delete a task.
+   * For temp: tasks (never synced), deletes immediately.
+   * For synced tasks, marks as deleted locally (tombstone) and attempts
+   * immediate remote deletion; if offline the tombstone ensures the remote
+   * deletion is retried on the next sync.
    */
   async deleteTask(taskUrl: string): Promise<void> {
-    // Delete locally
-    await this.localStore.deleteTask(taskUrl)
+    if (taskUrl.startsWith('temp:')) {
+      // Never reached remote; safe to delete immediately
+      await this.localStore.deleteTask(taskUrl)
+      return
+    }
 
-    // Delete remotely if online
-    if (this.remoteService && !taskUrl.startsWith('temp:')) {
+    // Mark as deleted locally (tombstone)
+    await this.localStore.markAsDeleted(taskUrl)
+
+    // Attempt immediate remote deletion (optimistic)
+    if (this.remoteService) {
       try {
         await this.remoteService.deleteTask(taskUrl)
+        // Remote deletion succeeded: remove the local tombstone
+        await this.localStore.deleteTask(taskUrl)
       } catch (err) {
-        console.error('Failed to delete remote task:', err)
-        // Task will be deleted on next sync
+        console.error(
+          'Failed to delete remote task, tombstone kept for retry on next sync:',
+          err,
+        )
+        // Tombstone remains; Phase 1a of next sync will retry
       }
     }
   }
@@ -430,9 +479,14 @@ let syncServiceInstance: SyncService | null = null
 export function getSyncService(
   localStore: IndexedDBTaskStorage,
   remoteService: RemoteTaskService | SolidTaskService | null = null,
+  conflictResolution: ConflictResolution = 'local-wins',
 ): SyncService {
   if (!syncServiceInstance) {
-    syncServiceInstance = new SyncService(localStore, remoteService)
+    syncServiceInstance = new SyncService(
+      localStore,
+      remoteService,
+      conflictResolution,
+    )
   }
   return syncServiceInstance
 }
