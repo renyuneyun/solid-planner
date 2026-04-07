@@ -29,6 +29,7 @@
           type="checkbox"
           :checked="task.completed"
           @change.stop="toggleComplete"
+          @click.stop
           class="task-checkbox"
           title="Mark as complete"
         />
@@ -78,6 +79,7 @@
           type="checkbox"
           :checked="child.completed"
           @change.stop="toggleChildComplete(child)"
+          @click.stop
           class="task-checkbox"
           title="Mark as complete"
         />
