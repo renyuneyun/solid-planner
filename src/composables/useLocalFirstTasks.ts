@@ -127,14 +127,16 @@ export function useLocalFirstTasks() {
    * Add a new TaskClass (local-first, then sync)
    */
   async function addTask(taskClass: TaskClass) {
-    // Add to store
-    taskStore.addTaskClass(taskClass)
-
     try {
-      // Save to local storage first (instant)
+      // Save to local storage first so the task is present in any concurrent
+      // sync reload (loadTaskClasses reads from local, so the task must be
+      // there before it appears in the store to avoid a disappear/reappear).
       await syncService.saveLocal(taskClass)
 
-      // Then sync to remote in background
+      // Add to store after local save succeeds
+      taskStore.addTaskClass(taskClass)
+
+      // Sync to remote in background (auto-sync also handles this)
       if (solidStorage.getService()) {
         syncService.sync().catch(err => {
           console.error('Background sync failed:', err)
