@@ -22,6 +22,7 @@
             :priority="true"
             :tasks-in-group="focusNowTasks"
             @select="openTask"
+            @complete="completeTask"
           />
         </div>
       </div>
@@ -45,6 +46,7 @@
             :priority="false"
             :tasks-in-group="thisWeekTasks"
             @select="openTask"
+            @complete="completeTask"
           />
         </div>
       </div>
@@ -74,6 +76,7 @@
               :priority="false"
               :tasks-in-group="weekGroup.tasks"
               @select="openTask"
+              @complete="completeTask"
             />
           </div>
         </div>
@@ -246,6 +249,15 @@ function formatWeekDateRange(weekNum: number): string {
 
 function openTask(task: TaskClass) {
   selectedTask.value = task
+}
+
+async function completeTask(task: TaskClass) {
+  if (!taskOperations.value) return
+  try {
+    await taskOperations.value.updateTask(task)
+  } catch (err) {
+    console.error('Failed to update task completion:', err)
+  }
 }
 
 async function saveTask() {

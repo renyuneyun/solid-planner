@@ -123,6 +123,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'select', task: TaskClass): void
+  (e: 'complete', task: TaskClass): void
 }>()
 
 const store = useTaskStore()
@@ -195,15 +196,14 @@ function formatDate(date: Date): string {
 
 // Toggle task completion
 function toggleComplete() {
-  const updatedTask = props.task
-  updatedTask.completed = !updatedTask.completed
-  store.updateTaskClass(updatedTask)
+  props.task.completed = !props.task.completed
+  emit('complete', props.task)
 }
 
 // Toggle child task completion
 function toggleChildComplete(child: TaskClass) {
   child.completed = !child.completed
-  store.updateTaskClass(child)
+  emit('complete', child)
 }
 
 // Select task for editing
