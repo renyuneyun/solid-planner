@@ -1,10 +1,5 @@
 ## Bugs -- fix these if possible unless other tasks are specified
 
-- [ ] After editing a task, the old entry and a new entry both exists (with Solid Login)
-- [ ] After creating a task, it does not immediately appear on the UI (with Solid Login)
-- [ ] On Weekly Planning page, after clicking "complete" / checkbox, the side panel also appears
-- [ ] On Weekly Plan page, after clicking checkbox, the task disappears, but comes back soon after
-
 ## High priority -- do these things first, whenever possible
 
 - [x] Support the core feature -- automatic proprity and task filtering
@@ -81,6 +76,13 @@
 - [x] After syncing, the page won't automatically reload and see the fetched tasks.
 - [x] Fix vercel deployment -- maybe only needing vercel.json
 - [x] Deploy as static page
+
+### Fixed Bugs
+
+- [x] After editing a task, the old entry and a new entry both exists (with Solid Login)
+- [x] After creating a task, it does not immediately appear on the UI (with Solid Login)
+- [x] On Weekly Planning page, after clicking "complete" / checkbox, the side panel also appears
+- [x] On Weekly Plan page, after clicking checkbox, the task disappears, but comes back soon after
 
 ## Other
 
