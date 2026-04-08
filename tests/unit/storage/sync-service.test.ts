@@ -504,8 +504,13 @@ describe('SyncService', () => {
 
       await service.sync()
 
+      // Task was recreated remotely
       expect(mockCreatedTask.save).toHaveBeenCalled()
-      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      // Local entry was remapped to the new URL (old URL deleted, new URL saved)
+      expect(mockLocalStore.deleteTask).toHaveBeenCalledWith(localTask.url)
+      expect(mockLocalStore.saveTask).toHaveBeenCalledWith(
+        expect.objectContaining({ url: 'https://pod.example/tasks/new-id' }),
+      )
     })
 
     it('remote-wins: deletes locally when pending local is deleted remotely', async () => {
