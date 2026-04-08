@@ -204,7 +204,10 @@ export class SyncService {
               console.log(
                 `Task ${localTask.url} had pending changes and was deleted remotely, recreating remotely (local-wins)`,
               )
-              await this.createRemoteTask(localTask)
+              const recreated = await this.createRemoteTask(localTask)
+              // Track the URL change so Phase 2 replaces the old local entry
+              // and Phase 3 skips the newly created remote task (preventing duplicates)
+              urlMapping.set(localTask.url, recreated.url!)
             } else {
               console.log(
                 `Task ${localTask.url} had pending changes but was deleted remotely, removing locally`,

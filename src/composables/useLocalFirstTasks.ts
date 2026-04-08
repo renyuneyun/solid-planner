@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useTaskStore } from '@/stores/tasks'
 import { TaskClass } from '@/models/TaskClass'
 import { useIndexedDBStorage } from './useIndexedDBStorage'
@@ -34,7 +34,7 @@ export function useLocalFirstTasks() {
   const isOnline = computed(() => syncStatus.value !== 'offline')
 
   // Subscribe to sync status changes; reload store from local after every successful sync
-  syncService.onStatusChange(async status => {
+  const unsubscribeStatusChange = syncService.onStatusChange(async status => {
     syncStatus.value = status
     if (status === 'idle' && solidStorage.getService()) {
       try {
@@ -48,6 +48,7 @@ export function useLocalFirstTasks() {
       }
     }
   })
+  onUnmounted(() => unsubscribeStatusChange())
 
   // Watch for Solid service initialization and update sync service
   watch(
