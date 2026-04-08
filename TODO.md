@@ -7,7 +7,7 @@
   - [x] Create a new page/tab for showing only relevant / important tasks (for the weekly planner); make it the default page/tab
   - [ ] Support priority calculation considering subtasks as well
   - [ ] Put more urgent subtasks earlier (while parent tasks later? how to design the UI?)
-- [ ] At log-out, allow the user to choose to keep the local data or clean them. This would allow switching user without unexpectedly touching others' data (tasks).
+- [x] At log-out, allow the user to choose to keep the local data or clean them. This would allow switching user without unexpectedly touching others' data (tasks).
 - [ ] Export and import feature -- both for supporting migration, and for disaster recovery
   - [ ] Also add automatic backup feature inside the Pod
 

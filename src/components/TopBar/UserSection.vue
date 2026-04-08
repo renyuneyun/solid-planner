@@ -3,55 +3,99 @@
     <!-- When user is logged in -->
     <div v-if="sessionStore.isLoggedIn" class="user-info">
       <div class="user-details">
-        <Avatar
-          :label="userInitials"
-          class="user-avatar"
-          shape="circle"
-        />
+        <Avatar :label="userInitials" class="user-avatar" shape="circle" />
         <div class="user-text">
           <span class="user-name">{{ displayName }}</span>
           <span class="user-webid">{{ sessionStore.webid }}</span>
         </div>
       </div>
-      <Button
-        icon="pi pi-sign-out"
-        text
-        rounded
-        severity="secondary"
-        @click="handleLogout"
-        v-tooltip.bottom="'Logout'"
-        class="logout-btn"
-      />
+      <Button icon="pi pi-sign-out" text rounded severity="secondary" @click="showLogoutDialog = true"
+        v-tooltip.bottom="'Logout'" class="logout-btn" />
     </div>
 
     <!-- When user is not logged in -->
     <div v-else class="login-section">
-      <Button
-        label="Login"
-        icon="pi pi-sign-in"
-        @click="handleLoginClick"
-        class="login-btn"
-      />
+      <Button label="Login" icon="pi pi-sign-in" @click="handleLoginClick" class="login-btn" />
     </div>
 
     <!-- Login Dialog -->
     <LoginDialog v-model:visible="showLoginDialog" />
+
+    <!-- Logout Confirmation Dialog -->
+    <Dialog v-model:visible="showLogoutDialog" header="Log Out" :modal="true" :closable="true"
+      :style="{ width: '28rem' }" @hide="cancelCountdown">
+      <p class="logout-dialog-message">
+        What should happen to your local data on this device?
+      </p>
+      <ul class="logout-dialog-hints">
+        <li>
+          <strong>Clear:</strong> removes tasks from this device.
+          Your data remains safe in your Solid Pod and will re-sync on next login.
+          Recommended on shared or public devices.
+        </li>
+        <li>
+          <strong>Keep:</strong> retains tasks locally, allowing offline viewing and editing even while logged out.
+          Changes will sync back to your Pod on next login.
+          Recommended on personal devices.
+        </li>
+      </ul>
+      <template #footer>
+        <Button :label="`Clear &amp; Log Out (${countdown}s)`" icon="pi pi-trash" severity="danger"
+          @click="handleLogout(true)" autofocus />
+        <Button label="Keep &amp; Log Out" icon="pi pi-sign-out" @click="handleLogout(false)" />
+      </template>
+    </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useSessionStore } from 'solid-helper-vue'
 import { useToast } from 'primevue/usetoast'
 import Avatar from 'primevue/avatar'
 import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
 import LoginDialog from './LoginDialog.vue'
+import { getIndexedDBStorage } from '@/storage/local/indexeddb-storage'
+import { useTaskStore } from '@/stores/tasks'
 
 const sessionStore = useSessionStore()
 const toast = useToast()
+const taskStore = useTaskStore()
 
 // Local state
 const showLoginDialog = ref(false)
+const showLogoutDialog = ref(false)
+
+// Countdown for auto-logout (keep local data)
+const COUNTDOWN_SECONDS = 30
+const countdown = ref(COUNTDOWN_SECONDS)
+let countdownTimer: ReturnType<typeof setInterval> | null = null
+
+function cancelCountdown() {
+  if (countdownTimer !== null) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  countdown.value = COUNTDOWN_SECONDS
+}
+
+watch(showLogoutDialog, visible => {
+  if (visible) {
+    countdown.value = COUNTDOWN_SECONDS
+    countdownTimer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        cancelCountdown()
+        handleLogout(true)
+      }
+    }, 1000)
+  } else {
+    cancelCountdown()
+  }
+})
+
+onUnmounted(cancelCountdown)
 
 // User display information
 const displayName = computed(() => {
@@ -78,13 +122,20 @@ const handleLoginClick = () => {
   showLoginDialog.value = true
 }
 
-const handleLogout = async () => {
+const handleLogout = async (clearLocalData: boolean) => {
+  showLogoutDialog.value = false
   try {
+    if (clearLocalData) {
+      await getIndexedDBStorage().clearAllTasks()
+      taskStore.clearTasks()
+    }
     await sessionStore.logout()
     toast.add({
       severity: 'info',
       summary: 'Logged Out',
-      detail: 'You have been logged out successfully',
+      detail: clearLocalData
+        ? 'You have been logged out and local data has been cleared.'
+        : 'You have been logged out successfully.',
       life: 3000
     })
   } catch (e: any) {
@@ -159,6 +210,21 @@ const handleLogout = async () => {
 .login-btn:hover {
   background: #0056b3;
   border-color: #0056b3;
+}
+
+.logout-dialog-message {
+  margin: 0 0 0.75rem;
+  font-weight: 500;
+}
+
+.logout-dialog-hints {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: #6c757d;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 /* Responsive design */
