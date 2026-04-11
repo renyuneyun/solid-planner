@@ -301,9 +301,10 @@ describe('Priority Utilities', () => {
     })
 
     it('should include tasks ending this week', () => {
-      const endDate = new Date()
-      endDate.setDate(endDate.getDate() + 3)
-      
+      const referenceDate = new Date('2026-02-18') // Wednesday
+      const endDate = new Date('2026-02-18')
+      endDate.setDate(endDate.getDate() + 3) // Feb 21 (Saturday, in week Feb 15-21)
+
       const task = new TaskClass({
         id: '1',
         name: 'Due This Week',
@@ -312,14 +313,15 @@ describe('Priority Utilities', () => {
         status: Status.IN_PROGRESS
       })
 
-      const result = getWeeklyRelevantTasks([task])
+      const result = getWeeklyRelevantTasks([task], referenceDate)
       expect(result).toContain(task)
     })
 
     it('should include tasks starting this week', () => {
-      const startDate = new Date()
-      startDate.setDate(startDate.getDate() + 2)
-      
+      const referenceDate = new Date('2026-02-18') // Wednesday
+      const startDate = new Date('2026-02-18')
+      startDate.setDate(startDate.getDate() + 2) // Feb 20 (Friday, in week Feb 15-21)
+
       const task = new TaskClass({
         id: '1',
         name: 'Starting This Week',
@@ -328,7 +330,7 @@ describe('Priority Utilities', () => {
         status: Status.IN_PROGRESS
       })
 
-      const result = getWeeklyRelevantTasks([task])
+      const result = getWeeklyRelevantTasks([task], referenceDate)
       expect(result).toContain(task)
     })
   })
@@ -439,13 +441,14 @@ describe('Priority Utilities', () => {
 
   describe('getUpcomingTasksByWeek', () => {
     it('should return empty array when no tasks for upcoming weeks', () => {
+      const referenceDate = new Date('2026-02-18') // Wednesday
       const task = new TaskClass({
         id: '1',
         name: 'Past Task',
-        addedDate: new Date()
+        addedDate: referenceDate // softDeadline = Feb 20 (Fri, in current week, not upcoming)
       })
 
-      const result = getUpcomingTasksByWeek([task])
+      const result = getUpcomingTasksByWeek([task], 4, referenceDate)
       expect(result).toEqual([])
     })
 
@@ -467,11 +470,12 @@ describe('Priority Utilities', () => {
     })
 
     it('should organize tasks by week number', () => {
-      const week1Date = new Date()
-      week1Date.setDate(week1Date.getDate() + 8) // Next week
+      const referenceDate = new Date('2026-02-18') // Wednesday; week 1: Feb 22-28, week 2: Mar 1-7
+      const week1Date = new Date('2026-02-18')
+      week1Date.setDate(week1Date.getDate() + 8) // Feb 26 (in week 1)
 
-      const week2Date = new Date()
-      week2Date.setDate(week2Date.getDate() + 15) // Week after
+      const week2Date = new Date('2026-02-18')
+      week2Date.setDate(week2Date.getDate() + 15) // Mar 5 (in week 2)
 
       const task1 = new TaskClass({
         id: '1',
@@ -489,7 +493,7 @@ describe('Priority Utilities', () => {
         status: Status.IN_PROGRESS
       })
 
-      const result = getUpcomingTasksByWeek([task1, task2])
+      const result = getUpcomingTasksByWeek([task1, task2], 4, referenceDate)
       expect(result.length).toBe(2)
       expect(result[0].week).toBe(1)
       expect(result[1].week).toBe(2)
