@@ -12,7 +12,7 @@
 
 ## Mid priority -- can do these things in the meantime
 
-- [ ] Update solid-helper-vue to v0.3.1, to use the new wrapper for login management
+- [x] Update solid-helper-vue to v0.3.1, to use the new wrapper for login management
 - [ ] On Weekly Plan page, don't immediately remove newly-finished tasks (by clicking the checkbox, e.g.)m but wait for a little while (and draw an animation / fade in the meantime), to allow users to revert changes if that happens to be the case
 - [ ] Add a "postpone" button to Weekly Plan page, to allow getting other tasks higher up in the queue (but does not actually change the end date of the task). If all tasks in "focus now" are postponed, move other tasks up (? needs further thinking for edge cases, but idea is this)
 - [ ] Change the color of different task status, to be both good-looking and differentiating enough
