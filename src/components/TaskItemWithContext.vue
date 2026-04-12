@@ -1,5 +1,8 @@
 <template>
-  <div class="task-item-with-context">
+  <div
+    class="task-item-with-context"
+    :class="{ 'is-completing': completing }"
+  >
     <!-- Parent tasks (shown greyed out for context) -->
     <div v-if="showParent && parentTasks.length > 0" class="parent-context">
       <div
@@ -36,6 +39,7 @@
         <span class="task-name" :class="{ completed: task.completed }">
           {{ task.name }}
         </span>
+        <span v-if="completing" class="completing-badge">Done — click to undo</span>
         <span
           v-if="isTaskOverdue"
           class="overdue-badge"
@@ -113,12 +117,14 @@ interface Props {
   showParent?: boolean
   priority?: boolean
   tasksInGroup?: TaskClass[] // All tasks in the same priority group
+  completing?: boolean // Task was just marked complete; still shown briefly for undo
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showParent: false,
   priority: false,
   tasksInGroup: () => [],
+  completing: false,
 })
 
 const emit = defineEmits<{
@@ -374,5 +380,35 @@ function selectTask() {
 
 .days-until {
   font-weight: 600;
+}
+
+@keyframes fade-completing {
+  0% {
+    opacity: 1;
+  }
+  83% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.task-item-with-context.is-completing {
+  animation: fade-completing 5s ease forwards;
+}
+
+.task-item-with-context.is-completing .main-task {
+  border-color: #d0d0d0;
+}
+
+.completing-badge {
+  padding: 0.125rem 0.5rem;
+  background: #28a745;
+  color: white;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 </style>

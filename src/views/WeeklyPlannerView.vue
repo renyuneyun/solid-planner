@@ -21,6 +21,7 @@
             :show-parent="true"
             :priority="true"
             :tasks-in-group="focusNowTasks"
+            :completing="pendingRemovalTasks.has(task.id)"
             @select="openTask"
             @complete="completeTask"
           />
@@ -45,6 +46,7 @@
             :show-parent="true"
             :priority="false"
             :tasks-in-group="thisWeekTasks"
+            :completing="pendingRemovalTasks.has(task.id)"
             @select="openTask"
             @complete="completeTask"
           />
@@ -165,6 +167,7 @@ import TaskForm from '@/components/TaskForm.vue'
 import type { TaskClass } from '@/models/TaskClass'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
+import { useStableSnapshot } from '@/composables/useStableSnapshot'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
@@ -204,14 +207,40 @@ const categorizedTasks = computed(() => {
 const focusNowTasks = computed(() => categorizedTasks.value.focusNow)
 const thisWeekTasks = computed(() => categorizedTasks.value.thisWeek)
 
+// Stable snapshot of task→group, one async tick behind live state.
+// Used in completeTask() to recover which section a task was in before
+// its status mutation caused it to drop out of the computed lists.
+const taskGroupSnapshot = useStableSnapshot(() => {
+  const map = new Map<string, 'focusNow' | 'thisWeek'>()
+  for (const t of focusNowTasks.value) map.set(t.id, 'focusNow')
+  for (const t of thisWeekTasks.value) map.set(t.id, 'thisWeek')
+  return map
+})
+
+// Pending removal: tasks marked complete but still shown briefly for undo
+interface PendingRemovalEntry {
+  task: TaskClass
+  group: 'focusNow' | 'thisWeek'
+  timerId: ReturnType<typeof setTimeout>
+}
+const pendingRemovalTasks = ref(new Map<string, PendingRemovalEntry>())
+
 const focusNowDisplayTasks = computed(() => {
-  const hidden = getTasksToHideInGroup(focusNowTasks.value, graph.value)
-  return focusNowTasks.value.filter(task => !hidden.has(task.id))
+  const completing = Array.from(pendingRemovalTasks.value.values())
+    .filter(e => e.group === 'focusNow')
+    .map(e => e.task)
+  const combined = [...focusNowTasks.value, ...completing]
+  const hidden = getTasksToHideInGroup(combined, graph.value)
+  return combined.filter(task => !hidden.has(task.id))
 })
 
 const thisWeekDisplayTasks = computed(() => {
-  const hidden = getTasksToHideInGroup(thisWeekTasks.value, graph.value)
-  return thisWeekTasks.value.filter(task => !hidden.has(task.id))
+  const completing = Array.from(pendingRemovalTasks.value.values())
+    .filter(e => e.group === 'thisWeek')
+    .map(e => e.task)
+  const combined = [...thisWeekTasks.value, ...completing]
+  const hidden = getTasksToHideInGroup(combined, graph.value)
+  return combined.filter(task => !hidden.has(task.id))
 })
 
 // Get upcoming weeks
@@ -253,6 +282,33 @@ function openTask(task: TaskClass) {
 
 async function completeTask(task: TaskClass) {
   if (!taskOperations.value) return
+
+  const isNowComplete = task.completed
+
+  if (isNowComplete) {
+    const existing = pendingRemovalTasks.value.get(task.id)
+    // Use the stable snapshot (one async tick behind) so we read the group
+    // the task was in before the status mutation dropped it from the computed lists.
+    const group: 'focusNow' | 'thisWeek' = existing?.group
+      ?? taskGroupSnapshot.value.get(task.id)
+      ?? 'thisWeek'
+
+    if (existing) clearTimeout(existing.timerId)
+
+    const timerId = setTimeout(() => {
+      pendingRemovalTasks.value.delete(task.id)
+    }, 5000)
+
+    pendingRemovalTasks.value.set(task.id, { task, group, timerId })
+  } else {
+    // User is undoing the completion
+    const entry = pendingRemovalTasks.value.get(task.id)
+    if (entry) {
+      clearTimeout(entry.timerId)
+      pendingRemovalTasks.value.delete(task.id)
+    }
+  }
+
   try {
     await taskOperations.value.updateTask(task)
   } catch (err) {
