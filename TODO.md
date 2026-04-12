@@ -13,13 +13,17 @@
 ## Mid priority -- can do these things in the meantime
 
 - [x] Update solid-helper-vue to v0.3.1, to use the new wrapper for login management
-- [ ] On Weekly Plan page, don't immediately remove newly-finished tasks (by clicking the checkbox, e.g.)m but wait for a little while (and draw an animation / fade in the meantime), to allow users to revert changes if that happens to be the case
-- [ ] Add a "postpone" button to Weekly Plan page, to allow getting other tasks higher up in the queue (but does not actually change the end date of the task). If all tasks in "focus now" are postponed, move other tasks up (? needs further thinking for edge cases, but idea is this)
+- [x] On Weekly Plan page, don't immediately remove newly-finished tasks (by clicking the checkbox, e.g.)m but wait for a little while (and draw an animation / fade in the meantime), to allow users to revert changes if that happens to be the case
+- [x] Add a "postpone" button to Weekly Plan page, to allow getting other tasks higher up in the queue (but does not actually change the end date of the task). If all tasks in "focus now" are postponed, move other tasks up (? needs further thinking for edge cases, but idea is this)
 - [ ] Change the color of different task status, to be both good-looking and differentiating enough
 - [ ] Don't draw two "syncing" icons on the UI during sync
 - [ ] Check tests capture all important parts
 - [ ] Have a static ClientId
 - [ ] Use NLP tools to support a "magic add task" feature, to parse from user's (semi-)natural language description of tasks to create new tasks
+- [ ] Have a configuration page; configs are stored to local and Pod both; if conflict (not normal updates) exists, Pod wins
+  - [ ] The conflict resolution strategy
+  - [ ] How long a postponing should be effective
+  - [ ] Storage location (grey-out; will be made explicit after better understanding about Type Index or Interop)
 
 ## Low priority -- do these only after finishing the above
 
