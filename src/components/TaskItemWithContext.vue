@@ -53,6 +53,23 @@
         >
           {{ completedSubtasks }}/{{ task.childIds.length }} subtasks
         </span>
+        <button
+          v-if="canPostpone && !isPostponed"
+          class="postpone-btn"
+          title="Move to This Week for now (restored automatically after a few hours)"
+          @click="handlePostpone"
+        >
+          Later
+        </button>
+        <span v-if="isPostponed" class="postponed-badge">Postponed</span>
+        <button
+          v-if="isPostponed"
+          class="restore-btn"
+          title="Restore to Focus Now"
+          @click="handleRestore"
+        >
+          Restore
+        </button>
       </div>
 
       <div v-if="task.description" class="task-description">
@@ -118,6 +135,8 @@ interface Props {
   priority?: boolean
   tasksInGroup?: TaskClass[] // All tasks in the same priority group
   completing?: boolean // Task was just marked complete; still shown briefly for undo
+  canPostpone?: boolean // Show "Later" button (focusNow tasks)
+  isPostponed?: boolean // Show "Postponed" badge + "Restore" button (thisWeek tasks)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -125,11 +144,15 @@ const props = withDefaults(defineProps<Props>(), {
   priority: false,
   tasksInGroup: () => [],
   completing: false,
+  canPostpone: false,
+  isPostponed: false,
 })
 
 const emit = defineEmits<{
   (e: 'select', task: TaskClass): void
   (e: 'complete', task: TaskClass): void
+  (e: 'postpone', task: TaskClass): void
+  (e: 'restore', task: TaskClass): void
 }>()
 
 const store = useTaskStore()
@@ -210,6 +233,17 @@ function toggleComplete() {
 function toggleChildComplete(child: TaskClass) {
   child.completed = !child.completed
   emit('complete', child)
+}
+
+// Postpone / restore
+function handlePostpone(event: MouseEvent) {
+  event.stopPropagation()
+  emit('postpone', props.task)
+}
+
+function handleRestore(event: MouseEvent) {
+  event.stopPropagation()
+  emit('restore', props.task)
 }
 
 // Select task for editing
@@ -410,5 +444,53 @@ function selectTask() {
   border-radius: 4px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.postpone-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6c757d;
+  background: transparent;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.postpone-btn:hover {
+  background: #f8f9fa;
+  border-color: #6c757d;
+  color: #343a40;
+}
+
+.postponed-badge {
+  padding: 0.125rem 0.5rem;
+  background: #6c757d;
+  color: white;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.restore-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #007bff;
+  background: transparent;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.restore-btn:hover {
+  background: #007bff;
+  color: white;
 }
 </style>

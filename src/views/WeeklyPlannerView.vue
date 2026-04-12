@@ -22,8 +22,11 @@
             :priority="true"
             :tasks-in-group="focusNowTasks"
             :completing="pendingRemovalTasks.has(task.id)"
+            :can-postpone="true"
+            :is-postponed="false"
             @select="openTask"
             @complete="completeTask"
+            @postpone="postponeTask"
           />
         </div>
       </div>
@@ -47,8 +50,11 @@
             :priority="false"
             :tasks-in-group="thisWeekTasks"
             :completing="pendingRemovalTasks.has(task.id)"
+            :can-postpone="false"
+            :is-postponed="postponedIds.has(task.id)"
             @select="openTask"
             @complete="completeTask"
+            @restore="restoreTask"
           />
         </div>
       </div>
@@ -168,6 +174,7 @@ import type { TaskClass } from '@/models/TaskClass'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
 import { useStableSnapshot } from '@/composables/useStableSnapshot'
+import { usePostponedTasks } from '@/composables/usePostponedTasks'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
@@ -204,8 +211,31 @@ const categorizedTasks = computed(() => {
   )
 })
 
-const focusNowTasks = computed(() => categorizedTasks.value.focusNow)
-const thisWeekTasks = computed(() => categorizedTasks.value.thisWeek)
+// Postpone: session state backed by localStorage, local-only for now
+// TODO(sync): see usePostponedTasks.ts for future Solid Pod sync notes
+const { postponedIds, postpone, restore } = usePostponedTasks()
+
+const effectiveCategorized = computed(() => {
+  const { focusNow, thisWeek } = categorizedTasks.value
+
+  const activeFocusNow = focusNow.filter(t => !postponedIds.value.has(t.id))
+  const postponedFromFocusNow = focusNow.filter(t => postponedIds.value.has(t.id))
+  const activeThisWeek = thisWeek.filter(t => !postponedIds.value.has(t.id))
+  const postponedFromThisWeek = thisWeek.filter(t => postponedIds.value.has(t.id))
+
+  // Promote thisWeek tasks to fill the slots vacated by postponed focusNow tasks
+  const openSlots = postponedFromFocusNow.length
+  const promoted = activeThisWeek.slice(0, openSlots)
+  const remainingThisWeek = activeThisWeek.slice(openSlots)
+
+  return {
+    focusNow: [...activeFocusNow, ...promoted],
+    thisWeek: [...remainingThisWeek, ...postponedFromFocusNow, ...postponedFromThisWeek],
+  }
+})
+
+const focusNowTasks = computed(() => effectiveCategorized.value.focusNow)
+const thisWeekTasks = computed(() => effectiveCategorized.value.thisWeek)
 
 // Stable snapshot of task→group, one async tick behind live state.
 // Used in completeTask() to recover which section a task was in before
@@ -286,6 +316,9 @@ async function completeTask(task: TaskClass) {
   const isNowComplete = task.completed
 
   if (isNowComplete) {
+    // Clear any postpone state when completing
+    restore(task.id)
+
     const existing = pendingRemovalTasks.value.get(task.id)
     // Use the stable snapshot (one async tick behind) so we read the group
     // the task was in before the status mutation dropped it from the computed lists.
@@ -324,6 +357,14 @@ async function saveTask() {
   } catch (err) {
     console.error('Failed to save task:', err)
   }
+}
+
+function postponeTask(task: TaskClass) {
+  postpone(task.id)
+}
+
+function restoreTask(task: TaskClass) {
+  restore(task.id)
 }
 
 function closeDrawer() {
