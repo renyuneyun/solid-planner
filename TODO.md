@@ -12,9 +12,6 @@
 
 ## Mid priority -- can do these things in the meantime
 
-- [x] Update solid-helper-vue to v0.3.1, to use the new wrapper for login management
-- [x] On Weekly Plan page, don't immediately remove newly-finished tasks (by clicking the checkbox, e.g.)m but wait for a little while (and draw an animation / fade in the meantime), to allow users to revert changes if that happens to be the case
-- [x] Add a "postpone" button to Weekly Plan page, to allow getting other tasks higher up in the queue (but does not actually change the end date of the task). If all tasks in "focus now" are postponed, move other tasks up (? needs further thinking for edge cases, but idea is this)
 - [ ] Change the color of different task status, to be both good-looking and differentiating enough
 - [ ] Don't draw two "syncing" icons on the UI during sync
 - [ ] Check tests capture all important parts
@@ -24,6 +21,9 @@
   - [ ] The conflict resolution strategy
   - [ ] How long a postponing should be effective
   - [ ] Storage location (grey-out; will be made explicit after better understanding about Type Index or Interop)
+- [ ] Convert to calendar (.ics) so it can be retrieved from calendar software
+  - [ ] Maybe appropriate permission is needed? Might be tricky for Solid's current permission model and calendar apps
+    - [ ] Maybe deploy a companion service that exposes a more conventional authentication mechanism for calendar apps to use
 
 ## Low priority -- do these only after finishing the above
 
@@ -80,6 +80,9 @@
 - [x] Fix vercel deployment -- maybe only needing vercel.json
 - [x] Deploy as static page
 - [x] At log-out, allow the user to choose to keep the local data or clean them. This would allow switching user without unexpectedly touching others' data (tasks).
+- [x] Update solid-helper-vue to v0.3.1, to use the new wrapper for login management
+- [x] On Weekly Plan page, don't immediately remove newly-finished tasks (by clicking the checkbox, e.g.)m but wait for a little while (and draw an animation / fade in the meantime), to allow users to revert changes if that happens to be the case
+- [x] Add a "postpone" button to Weekly Plan page, to allow getting other tasks higher up in the queue (but does not actually change the end date of the task). If all tasks in "focus now" are postponed, move other tasks up (? needs further thinking for edge cases, but idea is this)
 
 ### Fixed Bugs
 
