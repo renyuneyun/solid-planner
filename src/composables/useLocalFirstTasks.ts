@@ -7,6 +7,8 @@ import { getIndexedDBStorage } from '@/storage/local/indexeddb-storage'
 import { getSyncService } from '@/storage/sync/sync-service'
 import type { SyncStatus } from '@/storage/sync/sync-service'
 
+const AUTO_SYNC_INTERVAL = 1000 * 60 * 10; // 10 minutes
+
 /**
  * Composable for managing tasks with local-first architecture
  * Orchestrates between IndexedDB local storage and Solid Pod remote storage
@@ -59,8 +61,8 @@ export function useLocalFirstTasks() {
     async newService => {
       syncService.setRemoteService(newService)
       if (newService) {
-        // Start auto-sync every minute when authenticated
-        syncService.startAutoSync(60000)
+        // Start auto-sync every AUTO_SYNC_INTERVAL when authenticated
+        syncService.startAutoSync(AUTO_SYNC_INTERVAL)
         // Trigger an immediate sync now that the service is ready.
         // loadTasks() may have already run (before the service was available),
         // so we explicitly sync and reload the store here.
