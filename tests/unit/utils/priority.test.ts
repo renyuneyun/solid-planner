@@ -382,10 +382,10 @@ describe('Priority Utilities', () => {
       expect(result.focusNow.length + result.thisWeek.length).toBeGreaterThan(0)
     })
 
-    it('should put lower priority tasks in thisWeek', () => {
+    it('should promote the earliest this-week task to focusNow when nothing is overdue', () => {
       const laterDate = new Date()
       laterDate.setDate(laterDate.getDate() + 10)
-      
+
       const task = new TaskClass({
         id: '1',
         name: 'Later Task',
@@ -393,11 +393,42 @@ describe('Priority Utilities', () => {
         endDate: laterDate,
         status: Status.IN_PROGRESS
       })
-      
+
       tasks.set(task.id, task)
 
+      // With no overdue items the algorithm promotes the highest-priority task to focusNow
       const result = categorizeTasksByFocus([task], graph, tasks)
-      expect(result.thisWeek).toContain(task)
+      expect(result.focusNow).toContain(task)
+      expect(result.thisWeek).not.toContain(task)
+    })
+
+    it('should put lower priority tasks in thisWeek when focusNow is already occupied', () => {
+      const pastDate = new Date()
+      pastDate.setDate(pastDate.getDate() - 1)
+      const laterDate = new Date()
+      laterDate.setDate(laterDate.getDate() + 10)
+
+      const overdueTask = new TaskClass({
+        id: '1',
+        name: 'Overdue Task',
+        addedDate: new Date(),
+        endDate: pastDate,
+        status: Status.IN_PROGRESS
+      })
+      const laterTask = new TaskClass({
+        id: '2',
+        name: 'Later Task',
+        addedDate: new Date(),
+        endDate: laterDate,
+        status: Status.IN_PROGRESS
+      })
+
+      tasks.set(overdueTask.id, overdueTask)
+      tasks.set(laterTask.id, laterTask)
+
+      const result = categorizeTasksByFocus([overdueTask, laterTask], graph, tasks)
+      expect(result.focusNow).toContain(overdueTask)
+      expect(result.thisWeek).toContain(laterTask)
     })
   })
 

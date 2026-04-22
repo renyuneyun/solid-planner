@@ -276,6 +276,12 @@ export function categorizeTasksByFocus(
     }
   }
 
+  // If nothing qualified for Focus Now, promote the earliest (highest-scored)
+  // "this week" task so the section is never empty when work exists.
+  if (focusNow.length === 0 && thisWeek.length > 0) {
+    focusNow.push(thisWeek.shift()!)
+  }
+
   return { focusNow, thisWeek }
 }
 
