@@ -34,6 +34,39 @@
   --color-text: var(--vt-c-text-light-1);
 
   --section-gap: 160px;
+
+  /* Surface colors */
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8f9fa;
+  --color-surface-hover: #f0f0f0;
+
+  /* Border colors */
+  --color-border-subtle: #f0f0f0;
+  --color-border-light: #e0e0e0;
+  --color-border-medium: #e9ecef;
+
+  /* Text colors */
+  --color-text-primary: #2c3e50;
+  --color-text-secondary: #6c757d;
+  --color-text-muted: #999999;
+
+  /* Accent */
+  --color-accent: #007bff;
+  --color-accent-dark: #0056b3;
+
+  /* Drag handle */
+  --color-drag-handle: #cccccc;
+  --color-drag-handle-hover: #666666;
+
+  /* Task status colors */
+  --color-priority-border: #ffc107;
+  --color-priority-bg: #fffef7;
+  --color-overdue-border: #dc3545;
+  --color-overdue-bg: #fff5f5;
+  --color-completing-badge: #28a745;
+  --color-inprogress-accent: #17a2b8;
+  --color-inprogress-bg: #f0f8ff;
+  --color-postponed-badge: #6c757d;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -47,6 +80,39 @@
 
     --color-heading: var(--vt-c-text-dark-1);
     --color-text: var(--vt-c-text-dark-2);
+
+    /* Surface colors */
+    --color-surface: #1e1e2e;
+    --color-surface-alt: #252538;
+    --color-surface-hover: #2a2a3c;
+
+    /* Border colors */
+    --color-border-subtle: #2a2a3a;
+    --color-border-light: #353550;
+    --color-border-medium: #3a3a55;
+
+    /* Text colors */
+    --color-text-primary: #e2e8f0;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+
+    /* Accent */
+    --color-accent: #4a9eff;
+    --color-accent-dark: #2563eb;
+
+    /* Drag handle */
+    --color-drag-handle: #444460;
+    --color-drag-handle-hover: #8888aa;
+
+    /* Task status colors */
+    --color-priority-border: #d4a017;
+    --color-priority-bg: rgba(255, 193, 7, 0.08);
+    --color-overdue-border: #e74c3c;
+    --color-overdue-bg: rgba(220, 53, 69, 0.08);
+    --color-completing-badge: #27ae60;
+    --color-inprogress-accent: #0e9aa7;
+    --color-inprogress-bg: rgba(23, 162, 184, 0.08);
+    --color-postponed-badge: #4a5568;
   }
 }
 

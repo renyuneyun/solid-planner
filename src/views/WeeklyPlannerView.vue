@@ -8,7 +8,7 @@
         <h2 class="section-title">Focus Now</h2>
         <p class="section-description">
           {{
-            focusNowTasks.length === 0
+            focusNowDisplayTasks.length === 0
               ? 'No urgent tasks - great job!'
               : 'These tasks need your immediate attention'
           }}
@@ -20,9 +20,13 @@
             :task="task"
             :show-parent="true"
             :priority="true"
-            :tasks-in-group="focusNowTasks"
+            :tasks-in-group="focusNowMergedTasks"
+            :completing="pendingCompletions.has(task.id)"
+            :can-postpone="true"
+            :is-postponed="false"
             @select="openTask"
             @complete="completeTask"
+            @postpone="postponeTask"
           />
         </div>
       </div>
@@ -32,7 +36,7 @@
         <h2 class="section-title">This Week</h2>
         <p class="section-description">
           {{
-            thisWeekTasks.length === 0
+            thisWeekDisplayTasks.length === 0
               ? 'No other tasks this week'
               : 'Other tasks to complete this week'
           }}
@@ -44,9 +48,13 @@
             :task="task"
             :show-parent="true"
             :priority="false"
-            :tasks-in-group="thisWeekTasks"
+            :tasks-in-group="thisWeekMergedTasks"
+            :completing="pendingCompletions.has(task.id)"
+            :can-postpone="false"
+            :is-postponed="postponedIds.has(task.id)"
             @select="openTask"
             @complete="completeTask"
+            @restore="restoreTask"
           />
         </div>
       </div>
@@ -165,6 +173,8 @@ import TaskForm from '@/components/TaskForm.vue'
 import type { TaskClass } from '@/models/TaskClass'
 import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
+import { useStableSnapshot } from '@/composables/useStableSnapshot'
+import { usePostponedTasks } from '@/composables/usePostponedTasks'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
@@ -201,17 +211,80 @@ const categorizedTasks = computed(() => {
   )
 })
 
-const focusNowTasks = computed(() => categorizedTasks.value.focusNow)
-const thisWeekTasks = computed(() => categorizedTasks.value.thisWeek)
+// Postpone: session state backed by localStorage, local-only for now
+// TODO(sync): see usePostponedTasks.ts for future Solid Pod sync notes
+const { postponedIds, postpone, restore } = usePostponedTasks()
+
+const effectiveCategorized = computed(() => {
+  const { focusNow, thisWeek } = categorizedTasks.value
+
+  const activeFocusNow = focusNow.filter(t => !postponedIds.value.has(t.id))
+  const postponedFromFocusNow = focusNow.filter(t => postponedIds.value.has(t.id))
+  const activeThisWeek = thisWeek.filter(t => !postponedIds.value.has(t.id))
+  const postponedFromThisWeek = thisWeek.filter(t => postponedIds.value.has(t.id))
+
+  // Promote thisWeek tasks to fill the slots vacated by postponed focusNow tasks
+  const openSlots = postponedFromFocusNow.length
+  const promoted = activeThisWeek.slice(0, openSlots)
+  const remainingThisWeek = activeThisWeek.slice(openSlots)
+
+  return {
+    focusNow: [...activeFocusNow, ...promoted],
+    thisWeek: [...remainingThisWeek, ...postponedFromFocusNow, ...postponedFromThisWeek],
+  }
+})
+
+// Snapshot of { group, index } for every task — one async tick behind live state.
+// Still holds the pre-mutation position when completeTask() runs synchronously
+// after the checkbox mutation in TaskItemWithContext.
+const taskPositionSnapshot = useStableSnapshot(() => {
+  const map = new Map<string, { group: 'focusNow' | 'thisWeek'; index: number }>()
+  effectiveCategorized.value.focusNow.forEach((t, i) => map.set(t.id, { group: 'focusNow', index: i }))
+  effectiveCategorized.value.thisWeek.forEach((t, i) => map.set(t.id, { group: 'thisWeek', index: i }))
+  return map
+})
+
+// Pending completions: tasks marked complete but still shown briefly for undo.
+// Stores the task object and its pre-mutation position so it can be merged back
+// into the live display list at the correct location.
+const pendingCompletions = ref(new Map<string, {
+  task: TaskClass
+  group: 'focusNow' | 'thisWeek'
+  index: number
+  timerId: ReturnType<typeof setTimeout>
+}>())
+
+// Merge completing tasks back into a live section list at their original indices.
+// Sort descending so earlier splices don't shift later insertion points.
+function mergeCompleting(live: TaskClass[], group: 'focusNow' | 'thisWeek'): TaskClass[] {
+  const entries = Array.from(pendingCompletions.value.values())
+    .filter(e => e.group === group)
+    .sort((a, b) => b.index - a.index)
+  if (entries.length === 0) return live
+  const result = [...live]
+  for (const e of entries) {
+    result.splice(Math.min(e.index, result.length), 0, e.task)
+  }
+  return result
+}
+
+// Merged lists (live + completing tasks re-inserted) before subtask hiding.
+// Used as tasksInGroup so TaskItemWithContext can find children to display inline.
+const focusNowMergedTasks = computed(() =>
+  mergeCompleting(effectiveCategorized.value.focusNow, 'focusNow'),
+)
+const thisWeekMergedTasks = computed(() =>
+  mergeCompleting(effectiveCategorized.value.thisWeek, 'thisWeek'),
+)
 
 const focusNowDisplayTasks = computed(() => {
-  const hidden = getTasksToHideInGroup(focusNowTasks.value, graph.value)
-  return focusNowTasks.value.filter(task => !hidden.has(task.id))
+  const hidden = getTasksToHideInGroup(focusNowMergedTasks.value, graph.value)
+  return focusNowMergedTasks.value.filter(task => !hidden.has(task.id))
 })
 
 const thisWeekDisplayTasks = computed(() => {
-  const hidden = getTasksToHideInGroup(thisWeekTasks.value, graph.value)
-  return thisWeekTasks.value.filter(task => !hidden.has(task.id))
+  const hidden = getTasksToHideInGroup(thisWeekMergedTasks.value, graph.value)
+  return thisWeekMergedTasks.value.filter(task => !hidden.has(task.id))
 })
 
 // Get upcoming weeks
@@ -253,6 +326,35 @@ function openTask(task: TaskClass) {
 
 async function completeTask(task: TaskClass) {
   if (!taskOperations.value) return
+
+  const isNowComplete = task.completed
+
+  if (isNowComplete) {
+    // Clear any postpone state when completing
+    restore(task.id)
+
+    const existing = pendingCompletions.value.get(task.id)
+    if (existing) clearTimeout(existing.timerId)
+
+    // taskPositionSnapshot is one async tick behind, so it still holds the
+    // pre-mutation position at this synchronous point in the call stack.
+    const pos = taskPositionSnapshot.value.get(task.id)
+      ?? { group: 'thisWeek' as const, index: 0 }
+
+    const timerId = setTimeout(() => {
+      pendingCompletions.value.delete(task.id)
+    }, 5000)
+
+    pendingCompletions.value.set(task.id, { task, group: pos.group, index: pos.index, timerId })
+  } else {
+    // User is undoing the completion
+    const entry = pendingCompletions.value.get(task.id)
+    if (entry) {
+      clearTimeout(entry.timerId)
+      pendingCompletions.value.delete(task.id)
+    }
+  }
+
   try {
     await taskOperations.value.updateTask(task)
   } catch (err) {
@@ -268,6 +370,14 @@ async function saveTask() {
   } catch (err) {
     console.error('Failed to save task:', err)
   }
+}
+
+function postponeTask(task: TaskClass) {
+  postpone(task.id)
+}
+
+function restoreTask(task: TaskClass) {
+  restore(task.id)
 }
 
 function closeDrawer() {
@@ -290,37 +400,37 @@ function closeDrawer() {
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 2rem;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .focus-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #fff3cd;
-  border-left: 4px solid #ffc107;
+  background: var(--color-priority-bg);
+  border-left: 4px solid var(--color-priority-border);
   border-radius: 8px;
 }
 
 .week-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #f8f9fa;
-  border-left: 4px solid #6c757d;
+  background: var(--color-surface-alt);
+  border-left: 4px solid var(--color-postponed-badge);
   border-radius: 8px;
 }
 
 .upcoming-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #f0f8ff;
-  border-left: 4px solid #17a2b8;
+  background: var(--color-inprogress-bg);
+  border-left: 4px solid var(--color-inprogress-accent);
   border-radius: 8px;
 }
 
 .week-group {
   margin-bottom: 2rem;
   padding-left: 1rem;
-  border-left: 3px solid #cce5ff;
+  border-left: 3px solid var(--color-border-medium);
 }
 
 .week-group:last-child {
@@ -331,13 +441,13 @@ function closeDrawer() {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #17a2b8;
+  color: var(--color-inprogress-accent);
 }
 
 .week-dates {
   font-size: 0.85rem;
   font-weight: 400;
-  color: #666;
+  color: var(--color-text-muted);
   margin-left: 0.5rem;
 }
 
@@ -345,12 +455,12 @@ function closeDrawer() {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .section-description {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
   margin-bottom: 1rem;
 }
 
@@ -367,7 +477,7 @@ function closeDrawer() {
   top: 0;
   width: 480px;
   height: 100vh;
-  background-color: white;
+  background-color: var(--color-surface);
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
   padding: 1.5rem 2rem;
   overflow-y: auto;
@@ -386,12 +496,12 @@ function closeDrawer() {
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .drawer-header h2 {
   margin: 0;
-  color: #344767;
+  color: var(--color-text-primary);
   font-size: 1.5rem;
 }
 
@@ -408,7 +518,7 @@ function closeDrawer() {
   justify-content: space-between;
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .detail-overlay {
@@ -453,7 +563,7 @@ function closeDrawer() {
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .empty-state p {
@@ -464,7 +574,7 @@ function closeDrawer() {
 .btn-primary {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background: #007bff;
+  background: var(--color-accent);
   color: white;
   text-decoration: none;
   border-radius: 4px;
@@ -472,6 +582,6 @@ function closeDrawer() {
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--color-accent-dark);
 }
 </style>

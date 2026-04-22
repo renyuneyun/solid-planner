@@ -425,21 +425,21 @@ function updateTaskRelationships() {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background-color: #f8f9fa;
+  background-color: var(--color-surface-alt);
   position: relative;
 }
 
 .task-manager-header {
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid #e9ecef;
-  background-color: white;
+  border-bottom: 1px solid var(--color-border-medium);
+  background-color: var(--color-surface);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
 .task-manager-header h1 {
   margin: 0;
   font-size: 1.8rem;
-  color: #344767;
+  color: var(--color-text-primary);
 }
 
 .quick-add {
@@ -459,7 +459,7 @@ function updateTaskRelationships() {
 
 .task-list {
   flex: 1;
-  background-color: white;
+  background-color: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   overflow-y: auto;
@@ -481,9 +481,9 @@ function updateTaskRelationships() {
   display: flex;
   padding: 1rem 1.5rem;
   font-weight: bold;
-  border-bottom: 1px solid #e9ecef;
-  color: #344767;
-  background-color: #f8f9fa;
+  border-bottom: 1px solid var(--color-border-medium);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-alt);
   border-radius: 8px;
 }
 
@@ -513,7 +513,7 @@ function updateTaskRelationships() {
   top: 0;
   width: 480px;
   height: 100vh;
-  background-color: white;
+  background-color: var(--color-surface);
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
   padding: 1.5rem 2rem;
   overflow-y: auto;
@@ -532,12 +532,12 @@ function updateTaskRelationships() {
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .drawer-header h2 {
   margin: 0;
-  color: #344767;
+  color: var(--color-text-primary);
   font-size: 1.5rem;
 }
 
@@ -554,7 +554,7 @@ function updateTaskRelationships() {
   justify-content: space-between;
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .no-tasks {
@@ -563,18 +563,18 @@ function updateTaskRelationships() {
   align-items: center;
   justify-content: center;
   padding: 5rem 2rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .no-tasks i {
   font-size: 3.5rem;
   margin-bottom: 1.5rem;
-  color: #adb5bd;
+  color: var(--color-text-muted);
 }
 
 .ghost-task {
   opacity: 0.5;
-  background: #f0f0f0;
+  background: var(--color-surface-hover);
 }
 
 /* Add overlay layer styles */

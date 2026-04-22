@@ -1,5 +1,8 @@
 <template>
-  <div class="task-item-with-context">
+  <div
+    class="task-item-with-context"
+    :class="{ 'is-completing': completing }"
+  >
     <!-- Parent tasks (shown greyed out for context) -->
     <div v-if="showParent && parentTasks.length > 0" class="parent-context">
       <div
@@ -36,6 +39,7 @@
         <span class="task-name" :class="{ completed: task.completed }">
           {{ task.name }}
         </span>
+        <span v-if="completing" class="completing-badge">Done — click to undo</span>
         <span
           v-if="isTaskOverdue"
           class="overdue-badge"
@@ -49,6 +53,23 @@
         >
           {{ completedSubtasks }}/{{ task.childIds.length }} subtasks
         </span>
+        <button
+          v-if="canPostpone && !isPostponed && !completing"
+          class="postpone-btn"
+          title="Move to This Week for now (restored automatically after a few hours)"
+          @click="handlePostpone"
+        >
+          Later
+        </button>
+        <span v-if="isPostponed" class="postponed-badge">Postponed</span>
+        <button
+          v-if="isPostponed"
+          class="restore-btn"
+          title="Restore to Focus Now"
+          @click="handleRestore"
+        >
+          Restore
+        </button>
       </div>
 
       <div v-if="task.description" class="task-description">
@@ -113,17 +134,25 @@ interface Props {
   showParent?: boolean
   priority?: boolean
   tasksInGroup?: TaskClass[] // All tasks in the same priority group
+  completing?: boolean // Task was just marked complete; still shown briefly for undo
+  canPostpone?: boolean // Show "Later" button (focusNow tasks)
+  isPostponed?: boolean // Show "Postponed" badge + "Restore" button (thisWeek tasks)
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showParent: false,
   priority: false,
   tasksInGroup: () => [],
+  completing: false,
+  canPostpone: false,
+  isPostponed: false,
 })
 
 const emit = defineEmits<{
   (e: 'select', task: TaskClass): void
   (e: 'complete', task: TaskClass): void
+  (e: 'postpone', task: TaskClass): void
+  (e: 'restore', task: TaskClass): void
 }>()
 
 const store = useTaskStore()
@@ -206,6 +235,17 @@ function toggleChildComplete(child: TaskClass) {
   emit('complete', child)
 }
 
+// Postpone / restore
+function handlePostpone(event: MouseEvent) {
+  event.stopPropagation()
+  emit('postpone', props.task)
+}
+
+function handleRestore(event: MouseEvent) {
+  event.stopPropagation()
+  emit('restore', props.task)
+}
+
 // Select task for editing
 function selectTask() {
   emit('select', props.task)
@@ -223,7 +263,7 @@ function selectTask() {
 
 .parent-task {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--color-text-muted);
   padding: 0.25rem 0;
   display: flex;
   align-items: center;
@@ -231,7 +271,7 @@ function selectTask() {
 }
 
 .parent-indicator {
-  color: #ccc;
+  color: var(--color-drag-handle);
 }
 
 .parent-name {
@@ -240,8 +280,8 @@ function selectTask() {
 
 .main-task {
   padding: 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   transition: all 0.2s;
 }
@@ -252,17 +292,17 @@ function selectTask() {
 
 .main-task:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-color: #007bff;
+  border-color: var(--color-accent);
 }
 
 .main-task.is-priority {
-  border-left: 4px solid #ffc107;
-  background: #fffef7;
+  border-left: 4px solid var(--color-priority-border);
+  background: var(--color-priority-bg);
 }
 
 .main-task.is-overdue {
-  border-left: 4px solid #dc3545;
-  background: #fff5f5;
+  border-left: 4px solid var(--color-overdue-border);
+  background: var(--color-overdue-bg);
 }
 
 .task-header {
@@ -282,17 +322,17 @@ function selectTask() {
   flex: 1;
   font-size: 1rem;
   font-weight: 500;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .task-name.completed {
   text-decoration: line-through;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .overdue-badge {
   padding: 0.25rem 0.5rem;
-  background: #dc3545;
+  background: var(--color-overdue-border);
   color: white;
   font-size: 0.75rem;
   border-radius: 4px;
@@ -301,7 +341,7 @@ function selectTask() {
 
 .subtask-badge {
   padding: 0.25rem 0.5rem;
-  background: #6c757d;
+  background: var(--color-postponed-badge);
   color: white;
   font-size: 0.75rem;
   border-radius: 4px;
@@ -311,7 +351,7 @@ function selectTask() {
   margin-top: 0.5rem;
   margin-left: 2rem;
   padding-left: 1rem;
-  border-left: 3px solid #e0e0e0;
+  border-left: 3px solid var(--color-border-light);
 }
 
 .child-task {
@@ -320,30 +360,30 @@ function selectTask() {
   gap: 0.5rem;
   padding: 0.5rem;
   margin-bottom: 0.25rem;
-  background: #f8f9fa;
+  background: var(--color-surface-alt);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .child-task:hover {
-  background: #e9ecef;
+  background: var(--color-surface-hover);
 }
 
 .child-task-name {
   flex: 1;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--color-text-primary);
 }
 
 .child-task-name.completed {
   text-decoration: line-through;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .overdue-badge-small {
   padding: 0.125rem 0.375rem;
-  background: #dc3545;
+  background: var(--color-overdue-border);
   color: white;
   font-size: 0.7rem;
   border-radius: 3px;
@@ -353,7 +393,7 @@ function selectTask() {
 .task-description {
   margin-left: 2rem;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--color-text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -362,7 +402,7 @@ function selectTask() {
   display: flex;
   gap: 1rem;
   font-size: 0.85rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .deadline,
@@ -374,5 +414,83 @@ function selectTask() {
 
 .days-until {
   font-weight: 600;
+}
+
+@keyframes fade-completing {
+  0% {
+    opacity: 1;
+  }
+  83% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+.task-item-with-context.is-completing {
+  animation: fade-completing 5s ease forwards;
+}
+
+.task-item-with-context.is-completing .main-task {
+  border-color: var(--color-border-medium);
+}
+
+.completing-badge {
+  padding: 0.125rem 0.5rem;
+  background: var(--color-completing-badge);
+  color: white;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.postpone-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--color-border-medium);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.postpone-btn:hover {
+  background: var(--color-surface-alt);
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+.postponed-badge {
+  padding: 0.125rem 0.5rem;
+  background: var(--color-postponed-badge);
+  color: white;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.restore-btn {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent);
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.restore-btn:hover {
+  background: var(--color-accent);
+  color: white;
 }
 </style>

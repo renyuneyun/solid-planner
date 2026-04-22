@@ -150,16 +150,16 @@ function getStatusSeverity(status?: Status): string {
     case Status.COMPLETED:
       return 'success'
     case Status.IGNORED:
-      return 'secondary'
+      return 'contrast'
     default:
-      return 'warning'
+      return 'secondary'
   }
 }
 </script>
 
 <style scoped>
 .task-item {
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .task-item-content {
@@ -171,17 +171,17 @@ function getStatusSeverity(status?: Status): string {
 }
 
 .task-item-content:hover {
-  background-color: #f9f9f9;
+  background-color: var(--color-surface-hover);
 }
 
 .task-drag-handle {
   cursor: grab;
   padding: 0 0.5rem;
-  color: #ccc;
+  color: var(--color-drag-handle);
 }
 
 .task-drag-handle:hover {
-  color: #666;
+  color: var(--color-drag-handle-hover);
 }
 
 .task-expand {
@@ -193,7 +193,7 @@ function getStatusSeverity(status?: Status): string {
 
 .task-expand i.pi-circle-fill {
   font-size: 0.5rem;
-  color: #ccc;
+  color: var(--color-drag-handle);
 }
 
 .task-name {
@@ -209,7 +209,7 @@ function getStatusSeverity(status?: Status): string {
 
 .task-date {
   flex: 1;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .task-actions {
@@ -225,15 +225,15 @@ function getStatusSeverity(status?: Status): string {
 
 .task-completed .task-name {
   text-decoration: line-through;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .task-ignored .task-name {
-  color: #adb5bd;
+  color: var(--color-text-muted);
 }
 
 .ghost-task {
   opacity: 0.5;
-  background: #f0f0f0;
+  background: var(--color-surface-hover);
 }
 </style>
