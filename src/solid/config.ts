@@ -16,5 +16,5 @@ export const AUTH_CONFIG = {
       ? window.location.origin + import.meta.env.BASE_URL
       : 'http://localhost:5173/',
   // Client name that will be displayed on the login consent screen
-  clientName: 'Weekly Tasks App',
+  clientName: 'Solid Planner',
 }
