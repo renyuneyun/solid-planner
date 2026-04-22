@@ -400,37 +400,37 @@ function closeDrawer() {
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 2rem;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .focus-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #fff3cd;
-  border-left: 4px solid #ffc107;
+  background: var(--color-priority-bg);
+  border-left: 4px solid var(--color-priority-border);
   border-radius: 8px;
 }
 
 .week-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #f8f9fa;
-  border-left: 4px solid #6c757d;
+  background: var(--color-surface-alt);
+  border-left: 4px solid var(--color-postponed-badge);
   border-radius: 8px;
 }
 
 .upcoming-section {
   margin-bottom: 3rem;
   padding: 1.5rem;
-  background: #f0f8ff;
-  border-left: 4px solid #17a2b8;
+  background: var(--color-inprogress-bg);
+  border-left: 4px solid var(--color-inprogress-accent);
   border-radius: 8px;
 }
 
 .week-group {
   margin-bottom: 2rem;
   padding-left: 1rem;
-  border-left: 3px solid #cce5ff;
+  border-left: 3px solid var(--color-border-medium);
 }
 
 .week-group:last-child {
@@ -441,13 +441,13 @@ function closeDrawer() {
   font-size: 1.1rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #17a2b8;
+  color: var(--color-inprogress-accent);
 }
 
 .week-dates {
   font-size: 0.85rem;
   font-weight: 400;
-  color: #666;
+  color: var(--color-text-muted);
   margin-left: 0.5rem;
 }
 
@@ -455,12 +455,12 @@ function closeDrawer() {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .section-description {
   font-size: 0.9rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
   margin-bottom: 1rem;
 }
 
@@ -477,7 +477,7 @@ function closeDrawer() {
   top: 0;
   width: 480px;
   height: 100vh;
-  background-color: white;
+  background-color: var(--color-surface);
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
   padding: 1.5rem 2rem;
   overflow-y: auto;
@@ -496,12 +496,12 @@ function closeDrawer() {
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .drawer-header h2 {
   margin: 0;
-  color: #344767;
+  color: var(--color-text-primary);
   font-size: 1.5rem;
 }
 
@@ -518,7 +518,7 @@ function closeDrawer() {
   justify-content: space-between;
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .detail-overlay {
@@ -563,7 +563,7 @@ function closeDrawer() {
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .empty-state p {
@@ -574,7 +574,7 @@ function closeDrawer() {
 .btn-primary {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background: #007bff;
+  background: var(--color-accent);
   color: white;
   text-decoration: none;
   border-radius: 4px;
@@ -582,6 +582,6 @@ function closeDrawer() {
 }
 
 .btn-primary:hover {
-  background: #0056b3;
+  background: var(--color-accent-dark);
 }
 </style>

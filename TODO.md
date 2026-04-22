@@ -12,7 +12,7 @@
 
 ## Mid priority -- can do these things in the meantime
 
-- [ ] Change the color of different task status, to be both good-looking and differentiating enough
+- [x] Change the color of different task status, to be both good-looking and differentiating enough
 - [ ] Don't draw two "syncing" icons on the UI during sync
 - [ ] Check tests capture all important parts
 - [ ] Have a static ClientId

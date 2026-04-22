@@ -263,7 +263,7 @@ function selectTask() {
 
 .parent-task {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--color-text-muted);
   padding: 0.25rem 0;
   display: flex;
   align-items: center;
@@ -271,7 +271,7 @@ function selectTask() {
 }
 
 .parent-indicator {
-  color: #ccc;
+  color: var(--color-drag-handle);
 }
 
 .parent-name {
@@ -280,8 +280,8 @@ function selectTask() {
 
 .main-task {
   padding: 1rem;
-  background: white;
-  border: 1px solid #e0e0e0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
   border-radius: 8px;
   transition: all 0.2s;
 }
@@ -292,17 +292,17 @@ function selectTask() {
 
 .main-task:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-color: #007bff;
+  border-color: var(--color-accent);
 }
 
 .main-task.is-priority {
-  border-left: 4px solid #ffc107;
-  background: #fffef7;
+  border-left: 4px solid var(--color-priority-border);
+  background: var(--color-priority-bg);
 }
 
 .main-task.is-overdue {
-  border-left: 4px solid #dc3545;
-  background: #fff5f5;
+  border-left: 4px solid var(--color-overdue-border);
+  background: var(--color-overdue-bg);
 }
 
 .task-header {
@@ -322,17 +322,17 @@ function selectTask() {
   flex: 1;
   font-size: 1rem;
   font-weight: 500;
-  color: #2c3e50;
+  color: var(--color-text-primary);
 }
 
 .task-name.completed {
   text-decoration: line-through;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .overdue-badge {
   padding: 0.25rem 0.5rem;
-  background: #dc3545;
+  background: var(--color-overdue-border);
   color: white;
   font-size: 0.75rem;
   border-radius: 4px;
@@ -341,7 +341,7 @@ function selectTask() {
 
 .subtask-badge {
   padding: 0.25rem 0.5rem;
-  background: #6c757d;
+  background: var(--color-postponed-badge);
   color: white;
   font-size: 0.75rem;
   border-radius: 4px;
@@ -351,7 +351,7 @@ function selectTask() {
   margin-top: 0.5rem;
   margin-left: 2rem;
   padding-left: 1rem;
-  border-left: 3px solid #e0e0e0;
+  border-left: 3px solid var(--color-border-light);
 }
 
 .child-task {
@@ -360,30 +360,30 @@ function selectTask() {
   gap: 0.5rem;
   padding: 0.5rem;
   margin-bottom: 0.25rem;
-  background: #f8f9fa;
+  background: var(--color-surface-alt);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .child-task:hover {
-  background: #e9ecef;
+  background: var(--color-surface-hover);
 }
 
 .child-task-name {
   flex: 1;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--color-text-primary);
 }
 
 .child-task-name.completed {
   text-decoration: line-through;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .overdue-badge-small {
   padding: 0.125rem 0.375rem;
-  background: #dc3545;
+  background: var(--color-overdue-border);
   color: white;
   font-size: 0.7rem;
   border-radius: 3px;
@@ -393,7 +393,7 @@ function selectTask() {
 .task-description {
   margin-left: 2rem;
   font-size: 0.9rem;
-  color: #666;
+  color: var(--color-text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -402,7 +402,7 @@ function selectTask() {
   display: flex;
   gap: 1rem;
   font-size: 0.85rem;
-  color: #6c757d;
+  color: var(--color-text-secondary);
 }
 
 .deadline,
@@ -433,12 +433,12 @@ function selectTask() {
 }
 
 .task-item-with-context.is-completing .main-task {
-  border-color: #d0d0d0;
+  border-color: var(--color-border-medium);
 }
 
 .completing-badge {
   padding: 0.125rem 0.5rem;
-  background: #28a745;
+  background: var(--color-completing-badge);
   color: white;
   font-size: 0.72rem;
   border-radius: 4px;
@@ -450,9 +450,9 @@ function selectTask() {
   padding: 0.2rem 0.6rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #6c757d;
+  color: var(--color-text-secondary);
   background: transparent;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--color-border-medium);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -461,14 +461,14 @@ function selectTask() {
 }
 
 .postpone-btn:hover {
-  background: #f8f9fa;
-  border-color: #6c757d;
-  color: #343a40;
+  background: var(--color-surface-alt);
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
 }
 
 .postponed-badge {
   padding: 0.125rem 0.5rem;
-  background: #6c757d;
+  background: var(--color-postponed-badge);
   color: white;
   font-size: 0.72rem;
   border-radius: 4px;
@@ -480,9 +480,9 @@ function selectTask() {
   padding: 0.2rem 0.6rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: #007bff;
+  color: var(--color-accent);
   background: transparent;
-  border: 1px solid #007bff;
+  border: 1px solid var(--color-accent);
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -490,7 +490,7 @@ function selectTask() {
 }
 
 .restore-btn:hover {
-  background: #007bff;
+  background: var(--color-accent);
   color: white;
 }
 </style>

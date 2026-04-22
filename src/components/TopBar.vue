@@ -51,8 +51,8 @@ async function handleManualSync() {
 
 <style scoped>
 .top-bar {
-  background: #ffffff;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-medium);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
