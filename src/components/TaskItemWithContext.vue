@@ -54,7 +54,7 @@
           {{ completedSubtasks }}/{{ task.childIds.length }} subtasks
         </span>
         <button
-          v-if="canPostpone && !isPostponed"
+          v-if="canPostpone && !isPostponed && !completing"
           class="postpone-btn"
           title="Move to This Week for now (restored automatically after a few hours)"
           @click="handlePostpone"

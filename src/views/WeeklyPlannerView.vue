@@ -8,7 +8,7 @@
         <h2 class="section-title">Focus Now</h2>
         <p class="section-description">
           {{
-            focusNowTasks.length === 0
+            focusNowDisplayTasks.length === 0
               ? 'No urgent tasks - great job!'
               : 'These tasks need your immediate attention'
           }}
@@ -20,8 +20,8 @@
             :task="task"
             :show-parent="true"
             :priority="true"
-            :tasks-in-group="focusNowTasks"
-            :completing="pendingRemovalTasks.has(task.id)"
+            :tasks-in-group="focusNowMergedTasks"
+            :completing="pendingCompletions.has(task.id)"
             :can-postpone="true"
             :is-postponed="false"
             @select="openTask"
@@ -36,7 +36,7 @@
         <h2 class="section-title">This Week</h2>
         <p class="section-description">
           {{
-            thisWeekTasks.length === 0
+            thisWeekDisplayTasks.length === 0
               ? 'No other tasks this week'
               : 'Other tasks to complete this week'
           }}
@@ -48,8 +48,8 @@
             :task="task"
             :show-parent="true"
             :priority="false"
-            :tasks-in-group="thisWeekTasks"
-            :completing="pendingRemovalTasks.has(task.id)"
+            :tasks-in-group="thisWeekMergedTasks"
+            :completing="pendingCompletions.has(task.id)"
             :can-postpone="false"
             :is-postponed="postponedIds.has(task.id)"
             @select="openTask"
@@ -234,43 +234,57 @@ const effectiveCategorized = computed(() => {
   }
 })
 
-const focusNowTasks = computed(() => effectiveCategorized.value.focusNow)
-const thisWeekTasks = computed(() => effectiveCategorized.value.thisWeek)
-
-// Stable snapshot of task→group, one async tick behind live state.
-// Used in completeTask() to recover which section a task was in before
-// its status mutation caused it to drop out of the computed lists.
-const taskGroupSnapshot = useStableSnapshot(() => {
-  const map = new Map<string, 'focusNow' | 'thisWeek'>()
-  for (const t of focusNowTasks.value) map.set(t.id, 'focusNow')
-  for (const t of thisWeekTasks.value) map.set(t.id, 'thisWeek')
+// Snapshot of { group, index } for every task — one async tick behind live state.
+// Still holds the pre-mutation position when completeTask() runs synchronously
+// after the checkbox mutation in TaskItemWithContext.
+const taskPositionSnapshot = useStableSnapshot(() => {
+  const map = new Map<string, { group: 'focusNow' | 'thisWeek'; index: number }>()
+  effectiveCategorized.value.focusNow.forEach((t, i) => map.set(t.id, { group: 'focusNow', index: i }))
+  effectiveCategorized.value.thisWeek.forEach((t, i) => map.set(t.id, { group: 'thisWeek', index: i }))
   return map
 })
 
-// Pending removal: tasks marked complete but still shown briefly for undo
-interface PendingRemovalEntry {
+// Pending completions: tasks marked complete but still shown briefly for undo.
+// Stores the task object and its pre-mutation position so it can be merged back
+// into the live display list at the correct location.
+const pendingCompletions = ref(new Map<string, {
   task: TaskClass
   group: 'focusNow' | 'thisWeek'
+  index: number
   timerId: ReturnType<typeof setTimeout>
+}>())
+
+// Merge completing tasks back into a live section list at their original indices.
+// Sort descending so earlier splices don't shift later insertion points.
+function mergeCompleting(live: TaskClass[], group: 'focusNow' | 'thisWeek'): TaskClass[] {
+  const entries = Array.from(pendingCompletions.value.values())
+    .filter(e => e.group === group)
+    .sort((a, b) => b.index - a.index)
+  if (entries.length === 0) return live
+  const result = [...live]
+  for (const e of entries) {
+    result.splice(Math.min(e.index, result.length), 0, e.task)
+  }
+  return result
 }
-const pendingRemovalTasks = ref(new Map<string, PendingRemovalEntry>())
+
+// Merged lists (live + completing tasks re-inserted) before subtask hiding.
+// Used as tasksInGroup so TaskItemWithContext can find children to display inline.
+const focusNowMergedTasks = computed(() =>
+  mergeCompleting(effectiveCategorized.value.focusNow, 'focusNow'),
+)
+const thisWeekMergedTasks = computed(() =>
+  mergeCompleting(effectiveCategorized.value.thisWeek, 'thisWeek'),
+)
 
 const focusNowDisplayTasks = computed(() => {
-  const completing = Array.from(pendingRemovalTasks.value.values())
-    .filter(e => e.group === 'focusNow')
-    .map(e => e.task)
-  const combined = [...focusNowTasks.value, ...completing]
-  const hidden = getTasksToHideInGroup(combined, graph.value)
-  return combined.filter(task => !hidden.has(task.id))
+  const hidden = getTasksToHideInGroup(focusNowMergedTasks.value, graph.value)
+  return focusNowMergedTasks.value.filter(task => !hidden.has(task.id))
 })
 
 const thisWeekDisplayTasks = computed(() => {
-  const completing = Array.from(pendingRemovalTasks.value.values())
-    .filter(e => e.group === 'thisWeek')
-    .map(e => e.task)
-  const combined = [...thisWeekTasks.value, ...completing]
-  const hidden = getTasksToHideInGroup(combined, graph.value)
-  return combined.filter(task => !hidden.has(task.id))
+  const hidden = getTasksToHideInGroup(thisWeekMergedTasks.value, graph.value)
+  return thisWeekMergedTasks.value.filter(task => !hidden.has(task.id))
 })
 
 // Get upcoming weeks
@@ -319,26 +333,25 @@ async function completeTask(task: TaskClass) {
     // Clear any postpone state when completing
     restore(task.id)
 
-    const existing = pendingRemovalTasks.value.get(task.id)
-    // Use the stable snapshot (one async tick behind) so we read the group
-    // the task was in before the status mutation dropped it from the computed lists.
-    const group: 'focusNow' | 'thisWeek' = existing?.group
-      ?? taskGroupSnapshot.value.get(task.id)
-      ?? 'thisWeek'
-
+    const existing = pendingCompletions.value.get(task.id)
     if (existing) clearTimeout(existing.timerId)
 
+    // taskPositionSnapshot is one async tick behind, so it still holds the
+    // pre-mutation position at this synchronous point in the call stack.
+    const pos = taskPositionSnapshot.value.get(task.id)
+      ?? { group: 'thisWeek' as const, index: 0 }
+
     const timerId = setTimeout(() => {
-      pendingRemovalTasks.value.delete(task.id)
+      pendingCompletions.value.delete(task.id)
     }, 5000)
 
-    pendingRemovalTasks.value.set(task.id, { task, group, timerId })
+    pendingCompletions.value.set(task.id, { task, group: pos.group, index: pos.index, timerId })
   } else {
     // User is undoing the completion
-    const entry = pendingRemovalTasks.value.get(task.id)
+    const entry = pendingCompletions.value.get(task.id)
     if (entry) {
       clearTimeout(entry.timerId)
-      pendingRemovalTasks.value.delete(task.id)
+      pendingCompletions.value.delete(task.id)
     }
   }
 
