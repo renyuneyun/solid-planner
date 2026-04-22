@@ -87,12 +87,13 @@
       </div>
     </div>
 
-    <!-- Children tasks that are also prioritized -->
+    <!-- Children tasks that are also prioritized (arbitrary depth) -->
     <div v-if="childrenInGroup.length > 0" class="children-in-group">
       <div
-        v-for="child in childrenInGroup"
+        v-for="{ task: child, depth } in childrenInGroup"
         :key="child.id"
         class="child-task"
+        :style="{ marginLeft: `${depth * 1.5}rem` }"
         title="Click to edit task"
         @click="emit('select', child)"
       >
@@ -168,14 +169,29 @@ const parentTasks = computed(() => {
     .reverse() // Show from top-level parent down
 })
 
-// Get children tasks that are also in the same priority group
-const childrenInGroup = computed(() => {
+// Get all descendant tasks that are also in the same priority group,
+// collected depth-first so they render in natural tree order.
+// depth=0 means direct child; depth=1 grandchild, etc.
+const childrenInGroup = computed((): { task: TaskClass; depth: number }[] => {
   if (!props.tasksInGroup || props.tasksInGroup.length === 0) return []
 
   const taskIds = new Set(props.tasksInGroup.map(t => t.id))
-  return props.task.childIds
-    .map(id => store.taskMap.get(id))
-    .filter((t): t is TaskClass => t !== undefined && taskIds.has(t.id))
+  const result: { task: TaskClass; depth: number }[] = []
+
+  function collect(parentId: string, depth: number) {
+    const parent = store.taskMap.get(parentId)
+    if (!parent) return
+    for (const childId of parent.childIds) {
+      const child = store.taskMap.get(childId)
+      if (child && taskIds.has(child.id)) {
+        result.push({ task: child, depth })
+        collect(child.id, depth + 1)
+      }
+    }
+  }
+
+  collect(props.task.id, 0)
+  return result
 })
 
 // Check if task is overdue
