@@ -175,6 +175,7 @@ import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
 import { useStableSnapshot } from '@/composables/useStableSnapshot'
 import { usePostponedTasks } from '@/composables/usePostponedTasks'
+import { ANIMATIONS } from '@/config/animations'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
@@ -331,7 +332,7 @@ async function completeTask(task: TaskClass) {
 
     const timerId = setTimeout(() => {
       pendingCompletions.value.delete(task.id)
-    }, 5000)
+    }, ANIMATIONS.COMPLETION_FADE_DURATION)
 
     pendingCompletions.value.set(task.id, { task, group: pos.group, index: pos.index, timerId })
   } else {
