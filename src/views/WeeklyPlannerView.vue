@@ -202,35 +202,23 @@ const weeklyTasks = computed(() => {
   return getWeeklyRelevantTasks(allTasksArray.value)
 })
 
-// Categorize tasks by focus
-const categorizedTasks = computed(() => {
-  return categorizeTasksByFocus(
-    weeklyTasks.value,
-    graph.value,
-    allTasksMap.value,
-  )
-})
-
 // Postpone: session state backed by localStorage, local-only for now
 // TODO(sync): see usePostponedTasks.ts for future Solid Pod sync notes
 const { postponedIds, postpone, restore } = usePostponedTasks()
 
 const effectiveCategorized = computed(() => {
-  const { focusNow, thisWeek } = categorizedTasks.value
+  const activeWeeklyTasks = weeklyTasks.value.filter(t => !postponedIds.value.has(t.id))
+  const postponedTasks = weeklyTasks.value.filter(t => postponedIds.value.has(t.id))
 
-  const activeFocusNow = focusNow.filter(t => !postponedIds.value.has(t.id))
-  const postponedFromFocusNow = focusNow.filter(t => postponedIds.value.has(t.id))
-  const activeThisWeek = thisWeek.filter(t => !postponedIds.value.has(t.id))
-  const postponedFromThisWeek = thisWeek.filter(t => postponedIds.value.has(t.id))
-
-  // Promote thisWeek tasks to fill the slots vacated by postponed focusNow tasks
-  const openSlots = postponedFromFocusNow.length
-  const promoted = activeThisWeek.slice(0, openSlots)
-  const remainingThisWeek = activeThisWeek.slice(openSlots)
+  const { focusNow, thisWeek } = categorizeTasksByFocus(
+    activeWeeklyTasks,
+    graph.value,
+    allTasksMap.value,
+  )
 
   return {
-    focusNow: [...activeFocusNow, ...promoted],
-    thisWeek: [...remainingThisWeek, ...postponedFromFocusNow, ...postponedFromThisWeek],
+    focusNow,
+    thisWeek: [...thisWeek, ...postponedTasks],
   }
 })
 
