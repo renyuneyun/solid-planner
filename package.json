@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
     "build:debug": "VITE_BASE_PATH=/ DEBUG=1 npm run build --sourcemap",
+    "build:ghpages": "sh scripts/generate-clientid.sh https://me.ryey.icu/solid-planner/ && npm run build",
+    "build:vercel": "VITE_BASE_PATH=/ sh scripts/generate-clientid.sh https://solid-planner.vercel.app/ && npm run build",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build --force",

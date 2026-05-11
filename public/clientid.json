@@ -1,0 +1,11 @@
+{
+  "@context": ["https://www.w3.org/ns/solid/oidc-context.jsonld"],
+  "client_id": "https://me.ryey.icu/solid-planner/clientid.json",
+  "client_name": "Solid Planner",
+  "redirect_uris": ["https://me.ryey.icu/solid-planner/"],
+  "scope": "openid webid offline_access",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "application_type": "web"
+}

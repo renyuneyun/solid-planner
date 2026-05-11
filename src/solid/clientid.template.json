@@ -1,0 +1,11 @@
+{
+  "@context": ["https://www.w3.org/ns/solid/oidc-context.jsonld"],
+  "client_id": "{{CLIENT_ID_URL}}",
+  "client_name": "Solid Planner",
+  "redirect_uris": ["{{REDIRECT_URI}}"],
+  "scope": "openid webid offline_access",
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "application_type": "web"
+}
