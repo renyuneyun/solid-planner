@@ -175,6 +175,7 @@ import { useLocalFirstTasks } from '@/composables/useLocalFirstTasks'
 import { useSubtaskManagement } from '@/composables/useSubtaskManagement'
 import { useStableSnapshot } from '@/composables/useStableSnapshot'
 import { usePostponedTasks } from '@/composables/usePostponedTasks'
+import { ANIMATIONS } from '@/config/animations'
 
 const store = useTaskStore()
 const taskOperations = ref<ReturnType<typeof useLocalFirstTasks> | null>(null)
@@ -202,35 +203,23 @@ const weeklyTasks = computed(() => {
   return getWeeklyRelevantTasks(allTasksArray.value)
 })
 
-// Categorize tasks by focus
-const categorizedTasks = computed(() => {
-  return categorizeTasksByFocus(
-    weeklyTasks.value,
-    graph.value,
-    allTasksMap.value,
-  )
-})
-
 // Postpone: session state backed by localStorage, local-only for now
 // TODO(sync): see usePostponedTasks.ts for future Solid Pod sync notes
 const { postponedIds, postpone, restore } = usePostponedTasks()
 
 const effectiveCategorized = computed(() => {
-  const { focusNow, thisWeek } = categorizedTasks.value
+  const activeWeeklyTasks = weeklyTasks.value.filter(t => !postponedIds.value.has(t.id))
+  const postponedTasks = weeklyTasks.value.filter(t => postponedIds.value.has(t.id))
 
-  const activeFocusNow = focusNow.filter(t => !postponedIds.value.has(t.id))
-  const postponedFromFocusNow = focusNow.filter(t => postponedIds.value.has(t.id))
-  const activeThisWeek = thisWeek.filter(t => !postponedIds.value.has(t.id))
-  const postponedFromThisWeek = thisWeek.filter(t => postponedIds.value.has(t.id))
-
-  // Promote thisWeek tasks to fill the slots vacated by postponed focusNow tasks
-  const openSlots = postponedFromFocusNow.length
-  const promoted = activeThisWeek.slice(0, openSlots)
-  const remainingThisWeek = activeThisWeek.slice(openSlots)
+  const { focusNow, thisWeek } = categorizeTasksByFocus(
+    activeWeeklyTasks,
+    graph.value,
+    allTasksMap.value,
+  )
 
   return {
-    focusNow: [...activeFocusNow, ...promoted],
-    thisWeek: [...remainingThisWeek, ...postponedFromFocusNow, ...postponedFromThisWeek],
+    focusNow,
+    thisWeek: [...thisWeek, ...postponedTasks],
   }
 })
 
@@ -343,7 +332,7 @@ async function completeTask(task: TaskClass) {
 
     const timerId = setTimeout(() => {
       pendingCompletions.value.delete(task.id)
-    }, 5000)
+    }, ANIMATIONS.COMPLETION_FADE_DURATION)
 
     pendingCompletions.value.set(task.id, { task, group: pos.group, index: pos.index, timerId })
   } else {

@@ -12,10 +12,11 @@
 
 ## Mid priority -- can do these things in the meantime
 
+- [ ] Have a "add task" field in Weekly Planner
 - [x] Change the color of different task status, to be both good-looking and differentiating enough
 - [ ] Don't draw two "syncing" icons on the UI during sync
 - [ ] Check tests capture all important parts
-- [ ] Have a static ClientId
+- [x] Have a static ClientId
 - [ ] Use NLP tools to support a "magic add task" feature, to parse from user's (semi-)natural language description of tasks to create new tasks
 - [ ] Have a configuration page; configs are stored to local and Pod both; if conflict (not normal updates) exists, Pod wins
   - [ ] The conflict resolution strategy

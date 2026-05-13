@@ -445,7 +445,7 @@ function selectTask() {
 }
 
 .task-item-with-context.is-completing {
-  animation: fade-completing 5s ease forwards;
+  animation: fade-completing var(--completion-animation-duration) ease forwards;
 }
 
 .task-item-with-context.is-completing .main-task {

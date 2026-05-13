@@ -119,11 +119,15 @@ const handleLogin = async () => {
       return
     }
 
-    await sessionStore.login(
+    // Use static Client ID Document when available (non-localhost deployments).
+    // Fall back to dynamic registration via clientName on localhost.
+    await sessionStore.session?.login({
       oidcIssuer,
-      AUTH_CONFIG.redirectUrl,
-      AUTH_CONFIG.clientName,
-    )
+      redirectUrl: AUTH_CONFIG.redirectUrl,
+      ...(AUTH_CONFIG.clientIdDocumentUrl
+        ? { clientId: AUTH_CONFIG.clientIdDocumentUrl }
+        : { clientName: AUTH_CONFIG.clientName }),
+    })
 
     isVisible.value = false
     toast.add({

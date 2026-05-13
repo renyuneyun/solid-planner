@@ -414,6 +414,10 @@ export class SyncService {
     }, intervalMs)
   }
 
+  isAutoSyncRunning(): boolean {
+    return this.syncInterval !== null
+  }
+
   /**
    * Stop automatic syncing
    */
