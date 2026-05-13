@@ -61,14 +61,16 @@ export function useLocalFirstTasks() {
     async newService => {
       syncService.setRemoteService(newService)
       if (newService) {
-        // Start auto-sync every AUTO_SYNC_INTERVAL when authenticated
-        syncService.startAutoSync(AUTO_SYNC_INTERVAL)
-        // Trigger an immediate sync now that the service is ready.
-        // loadTasks() may have already run (before the service was available),
-        // so we explicitly sync and reload the store here.
-        await syncService.sync().catch(err => {
-          console.error('Initial sync after login failed:', err)
-        })
+        // Only trigger initial sync and start auto-sync when the service becomes
+        // newly available (i.e. the user just logged in). If auto-sync is already
+        // running it means another composable instance already bootstrapped it, so
+        // we skip the redundant sync that would otherwise fire on every view mount.
+        if (!syncService.isAutoSyncRunning()) {
+          syncService.startAutoSync(AUTO_SYNC_INTERVAL)
+          await syncService.sync().catch(err => {
+            console.error('Initial sync after login failed:', err)
+          })
+        }
       } else {
         syncService.stopAutoSync()
       }
