@@ -10,6 +10,8 @@ Rather than listing every task at once, it focuses on what matters this week —
 
 Data is stored as RDF and synced to your Solid Pod, with a local IndexedDB cache for fast, offline-capable access.
 
+> This app uses AI-assiated coding / Vibe Coding heavily. I intend to do as much as possible for ensuring things work as expected, but will still likely miss something. Continuous improvements are always being made.
+
 ## Features
 
 - **Weekly planning view** — see only the tasks relevant to this week, sorted by estimated priority
