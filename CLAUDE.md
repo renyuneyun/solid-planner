@@ -5,9 +5,10 @@ Start by reading **`Design.md`** (goals, constraints) and **`TODO.md`** (backlog
 ## Detailed docs
 
 - [`docs/architecture.md`](docs/architecture.md) — data model, storage layers, composable stack, auth, task IDs
-- [`docs/sync.md`](docs/sync.md) — 4-phase sync algorithm, conflict resolution
+- [`docs/sync.md`](docs/sync.md) — 4-phase sync algorithm, conflict resolution, multi-device scenarios
 - [`docs/priority.md`](docs/priority.md) — priority scoring formula, weekly filtering, Focus Now categorization
 - [`docs/rdf-vocab.md`](docs/rdf-vocab.md) — RDF predicates, Solid Pod storage location
+- [`docs/api.md`](docs/api.md) — quick reference for store, graph, composable, and common patterns
 
 ## Tech stack
 
