@@ -72,6 +72,10 @@ Singleton via `getIndexedDBStorage()`.
 
 Singleton is created per authentication session in `useSolidStorage`.
 
+### Future exploration: `soukai-bis`
+
+The maintainer's rewrite of Soukai, [`soukai-bis`](https://github.com/NoelDeMartin/soukai/tree/main/packages/soukai-bis), bundles its own `SolidEngine` and `IndexedDBEngine` plus a built-in `Sync` job, and moves CRDT metadata handling (such as `crdt:updatedAt`) into the library — which would remove the concurrent-update corruption the current `soukai` + `soukai-solid` pair is prone to. It uses a zod-based schema API and is still unreleased (`0.0.0`/`next`, no docs), so adopting it is a full rewrite of the model/storage/sync layers rather than an incremental change. Defer until it stabilizes.
+
 ---
 
 ## Composable stack
