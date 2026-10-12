@@ -14,12 +14,16 @@ const TASK_CONTAINER_NAME = 'planner/tasks/'
 export class SolidTaskService {
   private taskContainerUrl: string
   private engine: SolidEngine
+  private authFetch: typeof fetch
 
   constructor(podRootUri: string, authFetch: typeof fetch) {
     this.taskContainerUrl = `${withTrailingSlash(podRootUri)}${TASK_CONTAINER_NAME}`
 
-    // Initialize Soukai with a rate-limit-aware authenticated fetch
-    this.engine = new SolidEngine(withRateLimitRetry(authFetch))
+    // Retry transient HTTP failures (rate limiting) on every request.
+    this.authFetch = withRateLimitRetry(authFetch)
+
+    // Initialize Soukai with the same rate-limit-aware authenticated fetch
+    this.engine = new SolidEngine(this.authFetch)
     setEngine(this.engine)
 
     // Boot Solid models
@@ -34,7 +38,12 @@ export class SolidTaskService {
   }
 
   /**
-   * Fetch all tasks from the Solid Pod
+   * Fetch all tasks from the Solid Pod.
+   *
+   * A real fetch/parse error is rethrown (never swallowed as an empty result),
+   * because an empty result would make the sync service treat every local task
+   * as deleted remotely and wipe local storage. The only case that yields an
+   * empty array is a missing (404) task container.
    */
   async fetchTasks(): Promise<Task[]> {
     try {
@@ -42,9 +51,21 @@ export class SolidTaskService {
       const tasks = await Task.from(this.taskContainerUrl).all()
       return tasks as Task[]
     } catch (err) {
-      console.error('Error fetching tasks:', err)
-      // If container doesn't exist, return empty array
-      return []
+      if (await this.isContainerMissing()) return []
+
+      throw err
+    }
+  }
+
+  private async isContainerMissing(): Promise<boolean> {
+    try {
+      const response = await this.authFetch(this.taskContainerUrl, {
+        headers: { Accept: 'text/turtle' },
+      })
+
+      return response.status === 404
+    } catch {
+      return false
     }
   }
 

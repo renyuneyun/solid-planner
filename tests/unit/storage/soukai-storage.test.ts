@@ -19,7 +19,17 @@ describe('SolidTaskService', () => {
   beforeEach(() => {
     MockTaskModel.clear()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
+    authFetch.mockReset()
   })
+
+  const response = (body = '', status = 200) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      text: async () => body,
+      headers: { get: () => null },
+    }) as unknown as Response
 
   it('should build the task container URL', () => {
     const service = new SolidTaskService(podRoot, authFetch)
@@ -46,20 +56,26 @@ describe('SolidTaskService', () => {
     expect(tasks[1].title).toBe('B')
   })
 
-  it('should return empty array when fetch fails', async () => {
+  it('rethrows a fetch error instead of treating the remote as empty', async () => {
     const service = new SolidTaskService(podRoot, authFetch)
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const fromSpy = vi
-      .spyOn(MockTaskModel as unknown as { from: () => unknown }, 'from')
-      .mockImplementation(() => {
-        throw new Error('fetch failed')
-      })
+    vi.spyOn(MockTaskModel, 'from').mockImplementation(() => {
+      throw new Error('fetch failed')
+    })
+    authFetch.mockResolvedValue(response('', 500))
+
+    await expect(service.fetchTasks()).rejects.toThrow('fetch failed')
+  })
+
+  it('returns an empty array when the task container does not exist (404)', async () => {
+    const service = new SolidTaskService(podRoot, authFetch)
+    vi.spyOn(MockTaskModel, 'from').mockImplementation(() => {
+      throw new Error('not found')
+    })
+    authFetch.mockResolvedValue(response('', 404))
 
     const tasks = await service.fetchTasks()
 
     expect(tasks).toEqual([])
-    expect(fromSpy).toHaveBeenCalled()
-    errorSpy.mockRestore()
   })
 
   it('should convert Soukai tasks into TaskClass instances with graph', () => {
