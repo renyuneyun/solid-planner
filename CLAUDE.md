@@ -1,6 +1,8 @@
 # SoLiD Planner — Agent / Developer Orientation
 
-Start by reading **`Design.md`** (goals, constraints) and **`TODO.md`** (backlog). This file adds the minimum context needed to work effectively.
+Start by reading **`Design.md`** (goals, constraints) and **`TODO.md`** (backlog). This file adds the minimum project-specific context needed to work effectively.
+
+For agent workflow directives — worktrees, git hygiene, browser access, change tolerance/data safety, static deployment, tests — see **[`AGENTS.md`](AGENTS.md)**. For commands and detailed workflow, see **[`docs/development.md`](docs/development.md)**.
 
 ## Detailed docs
 
@@ -28,11 +30,4 @@ When making source code changes that affect architecture, data model, storage be
 
 ## Commands
 
-```sh
-npm run dev            # dev server
-npm run build          # production build (GitHub Pages, base=/solid-planner/)
-VITE_BASE_PATH=/ npm run build   # root-path build (Vercel)
-npm run test           # run all tests
-npm run type-check     # TypeScript only
-npm run lint           # ESLint with auto-fix
-```
+Dev, build, deploy, test, lint, and type-check commands are documented in [`docs/development.md`](docs/development.md) (`npm run dev`, `npm run build`, `npm run test`, `npm run type-check`, `npm run lint`, …).
