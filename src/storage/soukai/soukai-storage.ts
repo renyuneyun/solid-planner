@@ -4,6 +4,7 @@ import Task from './Task.model'
 import { TaskClass, Status } from '@/models/TaskClass'
 import { TaskGraph } from '@/models/TaskGraph'
 import { withTrailingSlash } from '@/utils/url'
+import { withRateLimitRetry } from './rate-limit-fetch'
 
 const TASK_CONTAINER_NAME = 'planner/tasks/'
 
@@ -17,8 +18,8 @@ export class SolidTaskService {
   constructor(podRootUri: string, authFetch: typeof fetch) {
     this.taskContainerUrl = `${withTrailingSlash(podRootUri)}${TASK_CONTAINER_NAME}`
 
-    // Initialize Soukai with authenticated fetch
-    this.engine = new SolidEngine(authFetch)
+    // Initialize Soukai with a rate-limit-aware authenticated fetch
+    this.engine = new SolidEngine(withRateLimitRetry(authFetch))
     setEngine(this.engine)
 
     // Boot Solid models
