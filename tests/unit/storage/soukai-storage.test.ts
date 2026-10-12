@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import '../../mocks/soukai-modules.mock'
+import { recordedEngines } from '../../mocks/soukai-modules.mock'
 import { MockTask } from '../../mocks/task-model.mock'
 import { SolidTaskService } from '@/storage/soukai/soukai-storage'
 import Task from '@/storage/soukai/Task.model'
@@ -34,6 +35,14 @@ describe('SolidTaskService', () => {
   it('should build the task container URL', () => {
     const service = new SolidTaskService(podRoot, authFetch)
     expect(service.getTaskContainerUrl()).toBe(containerUrl)
+  })
+
+  it('limits the number of concurrent document fetches on the engine', () => {
+    recordedEngines.length = 0
+
+    new SolidTaskService(podRoot, authFetch)
+
+    expect(recordedEngines[0]?.config.concurrentFetchBatchSize).toBe(2)
   })
 
   it('should fetch tasks from container', async () => {

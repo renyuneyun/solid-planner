@@ -22,8 +22,10 @@ export class SolidTaskService {
     // Retry transient HTTP failures (rate limiting) on every request.
     this.authFetch = withRateLimitRetry(authFetch)
 
-    // Initialize Soukai with the same rate-limit-aware authenticated fetch
-    this.engine = new SolidEngine(this.authFetch)
+    // Initialize Soukai with the same rate-limit-aware authenticated fetch, and
+    // keep concurrent document fetches small so the Pod is not overwhelmed (it
+    // rate-limits around a handful of requests per second).
+    this.engine = new SolidEngine(this.authFetch, { concurrentFetchBatchSize: 2 })
     setEngine(this.engine)
 
     // Boot Solid models

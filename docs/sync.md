@@ -114,3 +114,19 @@ Device A and B both modify the same task offline:
 ## Auto-sync
 
 `startAutoSync(intervalMs)` / `stopAutoSync()` manage a `setInterval` timer. `useLocalFirstTasks` calls these when the Solid service appears/disappears. The interval is 10 minutes (`AUTO_SYNC_INTERVAL` in `useLocalFirstTasks.ts`). The `isAutoSyncRunning()` check prevents duplicate timers when multiple view instances exist.
+
+## Rate limiting and fetch safety
+
+The Pod rate-limits requests (it handles only a handful per second), so `SolidTaskService`
+takes three precautions:
+
+- **Rethrow, don't empty.** A failed remote fetch is never treated as an empty remote:
+  `fetchTasks()` rethrows real errors and only returns `[]` when the task container itself is
+  missing (HTTP 404). This is critical because the sync algorithm interprets an empty remote
+  list as "every local synced task was deleted remotely" and would wipe local storage.
+- **Back off on 429.** Every request goes through `withRateLimitRetry` (`rate-limit-fetch.ts`),
+  which retries HTTP 429/502/503/504 honouring `Retry-After` (or exponential backoff) and throws
+  a `FetchRetryExhaustedError` when retries are exhausted, so a throttled read surfaces as a sync
+  error instead of silently dropping documents.
+- **Bound concurrency.** The Soukai engine is configured with `concurrentFetchBatchSize: 2` so
+  document fetches are not fired ten-at-a-time.
