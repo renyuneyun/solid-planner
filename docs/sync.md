@@ -114,3 +114,35 @@ Device A and B both modify the same task offline:
 ## Auto-sync
 
 `startAutoSync(intervalMs)` / `stopAutoSync()` manage a `setInterval` timer. `useLocalFirstTasks` calls these when the Solid service appears/disappears. The interval is 10 minutes (`AUTO_SYNC_INTERVAL` in `useLocalFirstTasks.ts`). The `isAutoSyncRunning()` check prevents duplicate timers when multiple view instances exist.
+
+## Write serialization
+
+All remote-mutating operations (`sync()` and `deleteTask()`) are serialized behind a
+promise-based write queue (`withWriteLock`). A remote delete can never overlap an
+in-progress sync's `save()` on the same document, which would otherwise corrupt the
+document via Soukai's non-atomic read→`DELETE DATA`→`INSERT DATA` update (see the
+"Self-healing" note below).
+
+## Fetch-failure safety
+
+A failed remote fetch is **never** treated as an empty remote. `SolidTaskService.fetchTasks()`
+rethrows real errors and only returns `[]` when the task container itself is missing (HTTP 404).
+This is critical because the sync algorithm interprets an empty remote list as "every local
+synced task was deleted remotely" and would wipe local storage.
+
+## Self-healing of concurrent-update corruption
+
+`crdt:updatedAt` (and the other single-valued fields of `Task`/`Metadata`) can end up with two
+values when two updates race on the same document: Soukai deletes only the triples it read, so a
+concurrently-inserted value survives. When loading fails because of this, `fetchTasks()` falls back
+to:
+
+1. Listing the task documents directly from the container (`ldp:contains`).
+2. Loading each document individually.
+3. On failure, detecting the duplicate values (`findStaleSingleValuedTriples`) and issuing a
+   targeted `DELETE DATA` PATCH that removes the stale triples only, keeping the latest
+   (or first) value.
+4. Retrying the load.
+
+This repairs existing corrupted Pod data in place and keeps unrelated triples (from other
+applications sharing the document) untouched.

@@ -70,6 +70,11 @@ Singleton via `getIndexedDBStorage()`.
 
 `SolidTaskService` wraps Soukai+soukai-solid to read/write RDF resources at `<podRoot>/planner/tasks/`. See [rdf-vocab.md](rdf-vocab.md) for the vocabulary used.
 
+If a task document's metadata is malformed (duplicate single-valued predicates such as
+`crdt:updatedAt`, caused by a concurrent-update race in Soukai), `fetchTasks()` repairs it in
+place with a targeted `DELETE DATA` PATCH (`src/storage/soukai/recover-metadata.ts`) before
+retrying, so a single corrupt document does not break the whole app.
+
 Singleton is created per authentication session in `useSolidStorage`.
 
 ---

@@ -16,9 +16,18 @@ describe('SolidTaskService', () => {
     clear: () => void
   }
 
+  const response = (body: string, status = 200) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      text: async () => body,
+    }) as unknown as Response
+
   beforeEach(() => {
     MockTaskModel.clear()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
+    authFetch.mockReset()
   })
 
   it('should build the task container URL', () => {
@@ -46,20 +55,100 @@ describe('SolidTaskService', () => {
     expect(tasks[1].title).toBe('B')
   })
 
-  it('should return empty array when fetch fails', async () => {
+  it('rethrows (does not swallow) a server error while fetching tasks', async () => {
     const service = new SolidTaskService(podRoot, authFetch)
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const fromSpy = vi
-      .spyOn(MockTaskModel as unknown as { from: () => unknown }, 'from')
-      .mockImplementation(() => {
+    vi.spyOn(MockTaskModel, 'from').mockReturnValue({
+      all: async () => {
         throw new Error('fetch failed')
-      })
+      },
+    } as never)
+    authFetch.mockResolvedValue(response('<html>server error</html>', 500))
+
+    await expect(service.fetchTasks()).rejects.toThrow()
+  })
+
+  it('returns an empty array only when the task container does not exist', async () => {
+    const service = new SolidTaskService(podRoot, authFetch)
+    vi.spyOn(MockTaskModel, 'from').mockReturnValue({
+      all: async () => {
+        throw new Error('not found')
+      },
+    } as never)
+    authFetch.mockResolvedValue(response('not found', 404))
 
     const tasks = await service.fetchTasks()
 
     expect(tasks).toEqual([])
-    expect(fromSpy).toHaveBeenCalled()
-    errorSpy.mockRestore()
+  })
+
+  it('repairs a document with duplicate crdt:updatedAt and returns the task', async () => {
+    const service = new SolidTaskService(podRoot, authFetch)
+    const taskUrl = `${containerUrl}task-broken`
+    const containerTurtle = [
+      `@prefix ldp: <http://www.w3.org/ns/ldp#> .`,
+      `<${containerUrl}> ldp:contains <task-broken> .`,
+    ].join('\n')
+    const corruptTurtle = [
+      '@prefix crdt: <https://vocab.noeldemartin.com/crdt/> .',
+      '@prefix schema: <https://schema.org/> .',
+      '<#it> a schema:Action ; schema:name "Broken" .',
+      '<#it-metadata> a crdt:Metadata ;',
+      '  crdt:resource <#it> ;',
+      '  crdt:updatedAt "2026-04-16T06:33:11.793Z"^^<http://www.w3.org/2001/XMLSchema#dateTime>,',
+      '                   "2026-04-16T06:33:17.604Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .',
+    ].join('\n')
+
+    let repaired = false
+    let patchBody = ''
+    authFetch.mockImplementation(async (url, init) => {
+      if (init?.method === 'PATCH') {
+        patchBody = String(init.body)
+        repaired = true
+        return response('', 204)
+      }
+      if (String(url) === taskUrl) return response(corruptTurtle)
+      if (String(url) === containerUrl) return response(containerTurtle)
+      return response('not found', 404)
+    })
+
+    vi.spyOn(MockTaskModel, 'from').mockReturnValue({
+      all: async () => {
+        throw new Error('Invalid Date value')
+      },
+    } as never)
+    vi.spyOn(MockTaskModel, 'find').mockImplementation((async (url: string) => {
+      if (url === taskUrl && !repaired) throw new Error('Invalid Date value')
+      return new MockTask({ url: taskUrl, title: 'Broken' })
+    }) as never)
+
+    const tasks = await service.fetchTasks()
+
+    expect(repaired).toBe(true)
+    expect(patchBody).toContain('DELETE DATA')
+    expect(patchBody).toContain('06:33:11.793Z')
+    expect(patchBody).not.toContain('06:33:17.604Z')
+    expect(tasks).toHaveLength(1)
+    expect(tasks[0].title).toBe('Broken')
+  })
+
+  it('throws when the container lists documents but none load as tasks', async () => {
+    const service = new SolidTaskService(podRoot, authFetch)
+    const containerTurtle = `<${containerUrl}> <http://www.w3.org/ns/ldp#contains> <doc-broken> .`
+
+    vi.spyOn(MockTaskModel, 'from').mockReturnValue({
+      all: async () => {
+        throw new Error('Invalid Date value')
+      },
+    } as never)
+    vi.spyOn(MockTaskModel, 'find').mockImplementation(
+      (async () => null) as never,
+    )
+    authFetch.mockImplementation(async url => {
+      if (String(url) === containerUrl) return response(containerTurtle)
+      return response('not found', 404)
+    })
+
+    await expect(service.fetchTasks()).rejects.toThrow('none could be loaded')
   })
 
   it('should convert Soukai tasks into TaskClass instances with graph', () => {

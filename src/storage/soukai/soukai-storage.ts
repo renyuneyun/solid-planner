@@ -1,11 +1,14 @@
 import { bootSolidModels, SolidEngine } from 'soukai-solid'
 import { setEngine } from 'soukai'
+import { Parser } from 'n3'
 import Task from './Task.model'
+import { findStaleSingleValuedTriples } from './recover-metadata'
 import { TaskClass, Status } from '@/models/TaskClass'
 import { TaskGraph } from '@/models/TaskGraph'
 import { withTrailingSlash } from '@/utils/url'
 
 const TASK_CONTAINER_NAME = 'planner/tasks/'
+const LDP_CONTAINS = 'http://www.w3.org/ns/ldp#contains'
 
 /**
  * Service for reading and writing tasks to/from a Solid Pod using Soukai
@@ -13,8 +16,10 @@ const TASK_CONTAINER_NAME = 'planner/tasks/'
 export class SolidTaskService {
   private taskContainerUrl: string
   private engine: SolidEngine
+  private authFetch: typeof fetch
 
   constructor(podRootUri: string, authFetch: typeof fetch) {
+    this.authFetch = authFetch
     this.taskContainerUrl = `${withTrailingSlash(podRootUri)}${TASK_CONTAINER_NAME}`
 
     // Initialize Soukai with authenticated fetch
@@ -33,17 +38,128 @@ export class SolidTaskService {
   }
 
   /**
-   * Fetch all tasks from the Solid Pod
+   * Fetch all tasks from the Solid Pod.
+   *
+   * A real fetch/parse error is rethrown (never swallowed as an empty result),
+   * because an empty result would make the sync service treat every local task
+   * as deleted remotely and wipe local storage. The only case that yields an
+   * empty array is a missing (404) task container.
+   *
+   * If loading fails because a document's metadata is malformed (e.g. duplicate
+   * `crdt:updatedAt` from a concurrent update), the affected documents are
+   * repaired in place and loading is retried document by document.
    */
   async fetchTasks(): Promise<Task[]> {
     try {
-      // Fetch all tasks from the container
       const tasks = await Task.from(this.taskContainerUrl).all()
       return tasks as Task[]
-    } catch (err) {
-      console.error('Error fetching tasks:', err)
-      // If container doesn't exist, return empty array
-      return []
+    } catch {
+      if (await this.isContainerMissing()) {
+        return []
+      }
+
+      return this.loadAllDocumentsWithRepair()
+    }
+  }
+
+  /**
+   * Read the task container listing directly so a single malformed document
+   * does not fail the whole fetch (the JSON-LD helper reads every document).
+   */
+  private async listTaskDocumentUrls(): Promise<string[]> {
+    const response = await this.authFetch(this.taskContainerUrl, {
+      headers: { Accept: 'text/turtle' },
+    })
+
+    if (response.status === 404) return []
+    if (!response.ok) {
+      throw new Error(`Failed to list task documents (HTTP ${response.status})`)
+    }
+
+    const turtle = await response.text()
+    const quads = new Parser({ baseIRI: this.taskContainerUrl }).parse(turtle)
+
+    return quads
+      .filter(
+        quad =>
+          quad.predicate.value === LDP_CONTAINS &&
+          quad.object.termType === 'NamedNode',
+      )
+      .map(quad => quad.object.value)
+  }
+
+  private async isContainerMissing(): Promise<boolean> {
+    try {
+      const response = await this.authFetch(this.taskContainerUrl, {
+        headers: { Accept: 'text/turtle' },
+      })
+
+      return response.status === 404
+    } catch {
+      return false
+    }
+  }
+
+  private async loadAllDocumentsWithRepair(): Promise<Task[]> {
+    const urls = await this.listTaskDocumentUrls()
+    const tasks: Task[] = []
+
+    for (const url of urls) {
+      let task: Task | null
+
+      try {
+        task = await Task.find(url)
+      } catch {
+        await this.repairDocument(url)
+        task = await Task.find(url)
+      }
+
+      if (task) tasks.push(task)
+    }
+
+    if (urls.length > 0 && tasks.length === 0) {
+      throw new Error('Task documents were found but none could be loaded')
+    }
+
+    return tasks
+  }
+
+  /**
+   * Remove duplicate values of single-valued predicates (such as
+   * `crdt:updatedAt`) from a document, using a targeted `DELETE DATA` PATCH so
+   * triples unrelated to this application are left untouched.
+   */
+  private async repairDocument(url: string): Promise<void> {
+    const response = await this.authFetch(url, {
+      headers: { Accept: 'text/turtle' },
+    })
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to read task document ${url} (HTTP ${response.status})`,
+      )
+    }
+
+    const turtle = await response.text()
+    const quads = new Parser({ baseIRI: url }).parse(turtle)
+    const stale = findStaleSingleValuedTriples(quads)
+
+    if (stale.length === 0) {
+      throw new Error(
+        `Task document ${url} failed to parse but no stale triples were found`,
+      )
+    }
+
+    const patch = await this.authFetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/sparql-update' },
+      body: `DELETE DATA {\n${stale.join('\n')}\n}`,
+    })
+
+    if (!patch.ok) {
+      throw new Error(
+        `Failed to repair task document ${url} (HTTP ${patch.status})`,
+      )
     }
   }
 

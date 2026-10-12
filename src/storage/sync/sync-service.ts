@@ -34,6 +34,7 @@ export class SyncService {
   private lastError: Error | null = null
   private syncInterval: number | null = null
   private listeners: Set<(status: SyncStatus) => void> = new Set()
+  private writeLock: Promise<void> = Promise.resolve()
 
   constructor(
     private localStore: IndexedDBTaskStorage,
@@ -76,6 +77,26 @@ export class SyncService {
   private updateStatus(status: SyncStatus) {
     this.syncStatus = status
     this.listeners.forEach(listener => listener(status))
+  }
+
+  /**
+   * Serialize remote-mutating operations so a single client never issues
+   * overlapping writes to the Solid Pod (which corrupts documents via Soukai's
+   * non-atomic read→DELETE DATA→INSERT DATA update).
+   *
+   * Returns a release function that must be called (from a `finally` block)
+   * once the operations are done.
+   */
+  private async acquireWriteLock(): Promise<() => void> {
+    const previous = this.writeLock
+    let release!: () => void
+    this.writeLock = new Promise<void>(resolve => {
+      release = resolve
+    })
+
+    await previous
+
+    return release
   }
 
   /**
@@ -143,6 +164,8 @@ export class SyncService {
 
     this.updateStatus('syncing')
     this.lastError = null
+
+    const release = await this.acquireWriteLock()
 
     try {
       // Fetch all remote tasks
@@ -274,6 +297,8 @@ export class SyncService {
       this.lastError = err instanceof Error ? err : new Error(String(err))
       this.updateStatus('error')
       throw err
+    } finally {
+      release()
     }
   }
 
@@ -458,8 +483,11 @@ export class SyncService {
     // Mark as deleted locally (tombstone)
     await this.localStore.markAsDeleted(taskUrl)
 
-    // Attempt immediate remote deletion (optimistic)
+    // Attempt immediate remote deletion (optimistic), serialized with syncs so
+    // it cannot overlap a save on the same document.
     if (this.remoteService) {
+      const release = await this.acquireWriteLock()
+
       try {
         await this.remoteService.deleteTask(taskUrl)
         // Remote deletion succeeded: remove the local tombstone
@@ -470,6 +498,8 @@ export class SyncService {
           err,
         )
         // Tombstone remains; Phase 1a of next sync will retry
+      } finally {
+        release()
       }
     }
   }
