@@ -447,7 +447,10 @@ describe('SyncService', () => {
       await service.sync()
 
       expect(mockLocalStore.saveTask).toHaveBeenCalledWith(
-        expect.objectContaining({ url: 'https://pod.example/tasks/task-1', title: 'Remote Title' }),
+        expect.objectContaining({
+          url: 'https://pod.example/tasks/task-1',
+          title: 'Remote Title',
+        }),
       )
     })
 
@@ -457,7 +460,9 @@ describe('SyncService', () => {
         mockRemoteService,
         'last-write-wins',
       )
-      const localTask = makeLocalTask({ lastModified: '2026-01-20T10:00:00.000Z' })
+      const localTask = makeLocalTask({
+        lastModified: '2026-01-20T10:00:00.000Z',
+      })
       const remoteTask = makeRemoteTask() // updatedAt 2026-01-15 (older)
       mockLocalStore.getAllTasks.mockResolvedValue([localTask])
       mockRemoteService.fetchTasks.mockResolvedValue([remoteTask])
@@ -474,7 +479,9 @@ describe('SyncService', () => {
         mockRemoteService,
         'last-write-wins',
       )
-      const localTask = makeLocalTask({ lastModified: '2026-01-10T10:00:00.000Z' }) // older
+      const localTask = makeLocalTask({
+        lastModified: '2026-01-10T10:00:00.000Z',
+      }) // older
       const remoteTask = makeRemoteTask()
       remoteTask.updatedAt = new Date('2026-01-20T10:00:00.000Z') // newer
       mockLocalStore.getAllTasks.mockResolvedValue([localTask])
@@ -483,7 +490,10 @@ describe('SyncService', () => {
       await service.sync()
 
       expect(mockLocalStore.saveTask).toHaveBeenCalledWith(
-        expect.objectContaining({ url: 'https://pod.example/tasks/task-1', title: 'Remote Title' }),
+        expect.objectContaining({
+          url: 'https://pod.example/tasks/task-1',
+          title: 'Remote Title',
+        }),
       )
     })
 
@@ -689,7 +699,58 @@ describe('SyncService', () => {
 
       // Task was deleted remotely; should not be saved back to local
       expect(mockLocalStore.saveTask).not.toHaveBeenCalledWith(
-        expect.objectContaining({ url: 'https://pod.example/tasks/deleted-task' }),
+        expect.objectContaining({
+          url: 'https://pod.example/tasks/deleted-task',
+        }),
+      )
+    })
+  })
+
+  describe('fetch failure safety', () => {
+    it('does not delete or modify local tasks when the remote fetch fails', async () => {
+      const localTask = {
+        url: 'https://pod.example/tasks/task-1',
+        title: 'Local Task',
+        lastModified: '2026-01-10T10:00:00.000Z',
+        syncStatus: 'synced' as const,
+      }
+      mockLocalStore.getAllTasks.mockResolvedValue([localTask])
+      mockRemoteService.fetchTasks.mockRejectedValue(new Error('parse error'))
+
+      await expect(syncService.sync()).rejects.toThrow('parse error')
+
+      expect(mockLocalStore.deleteTask).not.toHaveBeenCalled()
+      expect(mockLocalStore.saveTask).not.toHaveBeenCalled()
+      expect(syncService.getStatus()).toBe('error')
+    })
+  })
+
+  describe('write serialization', () => {
+    it('waits for an in-progress sync before performing a remote delete', async () => {
+      let releaseFetch!: (_tasks: Task[]) => void
+      mockRemoteService.fetchTasks.mockReturnValue(
+        new Promise<Task[]>(resolve => {
+          releaseFetch = resolve
+        }),
+      )
+      mockRemoteService.deleteTask.mockResolvedValue(undefined)
+      mockLocalStore.getAllTasks.mockResolvedValue([])
+
+      const syncPromise = syncService.sync()
+      const deletePromise = syncService.deleteTask(
+        'https://pod.example/tasks/task-1',
+      )
+
+      await Promise.resolve()
+
+      expect(mockRemoteService.deleteTask).not.toHaveBeenCalled()
+
+      releaseFetch([])
+      await syncPromise
+      await deletePromise
+
+      expect(mockRemoteService.deleteTask).toHaveBeenCalledWith(
+        'https://pod.example/tasks/task-1',
       )
     })
   })
