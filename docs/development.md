@@ -64,6 +64,8 @@ Scripts (from `package.json`):
 - [Vitest](https://vitest.dev/). Tests live under `tests/unit/`, mirroring `src/` paths; mocks
   under `tests/mocks/`; helpers under `tests/helpers/`.
 - `npm run test` (once), `npm run test:watch`, `npm run test:coverage`, `npm run test:ui`.
+  `vitest.config.ts` excludes `**/.worktrees/**`, so running from the primary checkout does not
+  pick up the tests of the worktrees kept underneath it.
 - `npm run type-check` (vue-tsc), `npm run lint` (ESLint, auto-fix), `npm run format` (Prettier).
 - Composition API only; no comments unless the *why* is non-obvious.
 
